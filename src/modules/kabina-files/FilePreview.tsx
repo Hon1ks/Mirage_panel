@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -32,6 +33,24 @@ import { filesErrorSentence } from '@/modules/kabina-files/utils/filesErrors';
 import { api, readApiJson } from '@/shared/api';
 import type { KabinaFileEntry } from '@/shared/types';
 import { pluralRu } from '@/shared/utils';
+
+/**
+ * Review fix (Н-14): a `blob:` URL shares the panel's origin, and «Open image in
+ * new tab» renders an SVG blob as a document — its scripts would run with the
+ * panel's token. The preview gets a sanitized copy (no scripts, handlers or
+ * foreignObject); the download keeps the original file.
+ */
+function isSvgFile(name: string, blob: Blob): boolean {
+  return /\.svg$/i.test(name) || blob.type.includes('svg');
+}
+
+async function sanitizedSvgBlob(blob: Blob): Promise<Blob> {
+  const clean = DOMPurify.sanitize(await blob.text(), {
+    USE_PROFILES: { svg: true, svgFilters: true },
+    FORBID_TAGS: ['script', 'foreignObject', 'use'],
+  });
+  return new Blob([clean], { type: 'image/svg+xml' });
+}
 
 /** Code previews show this many lines; the fade hides the cut. */
 const CODE_PREVIEW_LINES = 40;
@@ -111,7 +130,9 @@ function useFileContent(entry: KabinaFileEntry | null, kind: PreviewKind, projec
           setContent({ state: 'sheet', sheet: await readSheetPreview(blob) });
           return;
         }
-        objectUrl = URL.createObjectURL(kind === 'pdf' ? new Blob([blob], { type: 'application/pdf' }) : blob);
+        objectUrl = URL.createObjectURL(kind === 'pdf'
+          ? new Blob([blob], { type: 'application/pdf' })
+          : isSvgFile(entry.name, blob) ? await sanitizedSvgBlob(blob) : blob);
         setContent({ state: 'blob', url: objectUrl, blob });
       } catch (error) {
         if (!controller.signal.aborted) {

@@ -31,6 +31,15 @@ export function createSystemUpdateService(dependencies: SystemUpdateDependencies
   return {
     /** Selects and executes the correct update workflow for this installation. */
     async updateSystem() {
+      // Review fix (Н-8): the button would pull, install (with install scripts) and build
+      // whatever the remote holds, unreviewed. Off unless the server opts in explicitly.
+      if (dependencies.environment.MIRAGE_ALLOW_UI_UPDATE !== '1') {
+        return {
+          success: false as const,
+          error: 'Обновление из панели отключено. Обновляйте вручную после проверки изменений '
+            + `(${GIT_UPDATE_COMMAND}); включить кнопку — MIRAGE_ALLOW_UI_UPDATE=1.`,
+        };
+      }
       // Mirage is installed from a git checkout (or built into a Docker image); it is not on
       // npm. A copy without .git cannot update itself — point to the releases instead.
       if (!dependencies.isPlatform && dependencies.installMode !== 'git') {

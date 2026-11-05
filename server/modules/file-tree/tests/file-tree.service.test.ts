@@ -793,3 +793,90 @@ test('the suggested name sent back as the relative path uploads beside the origi
     );
   });
 });
+
+test('a symlink inside the project does not reach files outside it (review fix Н-15)', async () => {
+  const projectRoot = await fsPromises.mkdtemp(path.join(testDirectory, 'file-tree-link-project-'));
+  const outsideDirectory = await fsPromises.mkdtemp(path.join(testDirectory, 'file-tree-outside-'));
+
+  try {
+    const secretPath = path.join(outsideDirectory, 'secret.txt');
+    await fsPromises.writeFile(secretPath, 'secret', 'utf8');
+    await fsPromises.symlink(outsideDirectory, path.join(projectRoot, 'escape-dir'));
+    await fsPromises.symlink(secretPath, path.join(projectRoot, 'escape-file'));
+    const service = createRealFileSystemService(projectRoot);
+    const outside = (error: unknown) => (error as AppError).code === 'PATH_OUTSIDE_PROJECT';
+
+    for (const target of ['escape-file', 'escape-dir/secret.txt', path.join(projectRoot, 'escape-file')]) {
+      await assert.rejects(service.readTextFile('project-1', target), outside);
+      await assert.rejects(service.openFile('project-1', target), outside);
+      await assert.rejects(service.saveTextFile('project-1', target, 'overwritten'), outside);
+    }
+    await assert.rejects(
+      service.createEntry({ projectId: 'project-1', parentPath: 'escape-dir', type: 'file', name: 'planted.txt' }),
+      outside,
+    );
+    await assert.rejects(service.deleteEntry({ projectId: 'project-1', targetPath: 'escape-dir/secret.txt' }), outside);
+    await assert.rejects(
+      service.renameEntry({ projectId: 'project-1', oldPath: 'escape-dir/secret.txt', newName: 'moved.txt' }),
+      outside,
+    );
+    const uploadedTemporaryPath = path.join(projectRoot, 'upload.tmp');
+    await fsPromises.writeFile(uploadedTemporaryPath, 'upload', 'utf8');
+    await assert.rejects(
+      service.storeUploadedFiles({
+        projectId: 'project-1',
+        targetPath: 'escape-dir',
+        relativePaths: [],
+        requestedFileCount: 1,
+        files: [{ originalName: 'upload.txt', temporaryPath: uploadedTemporaryPath, size: 6, mimeType: 'text/plain' }],
+      }),
+      outside,
+    );
+    assert.deepEqual(await fsPromises.readdir(outsideDirectory), ['secret.txt']);
+    assert.equal(await fsPromises.readFile(secretPath, 'utf8'), 'secret');
+
+    // The link itself is the project's own entry: removing it is allowed and leaves the target alone.
+    await service.deleteEntry({ projectId: 'project-1', targetPath: 'escape-file' });
+    assert.equal(await fsPromises.readFile(secretPath, 'utf8'), 'secret');
+  } finally {
+    await fsPromises.rm(projectRoot, { recursive: true, force: true });
+    await fsPromises.rm(outsideDirectory, { recursive: true, force: true });
+  }
+});
+
+test('keys, credentials and the panel database are not readable outside the project (review fix Н-7)', async () => {
+  const workspaceRoot = await fsPromises.mkdtemp(path.join(testDirectory, 'file-tree-workspace-'));
+  const projectRoot = path.join(workspaceRoot, 'project');
+
+  try {
+    await fsPromises.mkdir(projectRoot);
+    const privateFiles = [
+      ['.mirage', 'auth.db'], ['.ssh', 'id_ed25519'], ['.config', 'gh', 'hosts.yml'],
+      ['.claude', '.credentials.json'], ['.claude.json'], ['other', '.env'], ['.bash_history'],
+    ];
+    for (const segments of privateFiles) {
+      await fsPromises.mkdir(path.join(workspaceRoot, ...segments.slice(0, -1)), { recursive: true });
+      await fsPromises.writeFile(path.join(workspaceRoot, ...segments), 'private', 'utf8');
+    }
+    await fsPromises.writeFile(path.join(projectRoot, '.env'), 'project env', 'utf8');
+    const service = createRealFileSystemService(projectRoot, workspaceRoot);
+
+    for (const segments of privateFiles) {
+      const target = path.join(workspaceRoot, ...segments);
+      await assert.rejects(
+        service.readTextFile('project-1', target),
+        (error: unknown) => (error as AppError).code === 'PATH_OUTSIDE_PROJECT',
+        target,
+      );
+      await assert.rejects(
+        service.openFile('project-1', target),
+        (error: unknown) => (error as AppError).code === 'PATH_OUTSIDE_PROJECT',
+        target,
+      );
+    }
+    // Inside the project the owner's own files open as before.
+    assert.equal((await service.readTextFile('project-1', path.join(projectRoot, '.env'))).content, 'project env');
+  } finally {
+    await fsPromises.rm(workspaceRoot, { recursive: true, force: true });
+  }
+});

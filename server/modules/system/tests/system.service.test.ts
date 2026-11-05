@@ -13,13 +13,30 @@ function createDependencies(
     homeDirectory: '/home/cloudcli',
     installMode: 'git',
     isPlatform: false,
-    environment: { TEST_ENVIRONMENT: 'true' },
+    environment: { TEST_ENVIRONMENT: 'true', MIRAGE_ALLOW_UI_UPDATE: '1' },
     runShellCommand: async () => ({ exitCode: 0, output: 'updated', errorOutput: '' }),
     logInfo: () => undefined,
     logError: () => undefined,
     ...overrides,
   };
 }
+
+test('the update button runs nothing unless MIRAGE_ALLOW_UI_UPDATE=1 (review fix Н-8)', async () => {
+  const calls: unknown[][] = [];
+  const service = createSystemUpdateService(createDependencies({
+    environment: { TEST_ENVIRONMENT: 'true' },
+    runShellCommand: async (command, workingDirectory, environment) => {
+      calls.push([command, workingDirectory, environment]);
+      return { exitCode: 0, output: '', errorOutput: '' };
+    },
+  }));
+
+  const result = await service.updateSystem();
+
+  assert.deepEqual(calls, []);
+  assert.equal(result.success, false);
+  assert.match(String((result as { error?: string }).error), /MIRAGE_ALLOW_UI_UPDATE=1/);
+});
 
 test('git installations update from the application root', async () => {
   const calls: unknown[][] = [];

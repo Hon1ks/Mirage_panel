@@ -1,3 +1,4 @@
+import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 
 import ignore from 'ignore';
@@ -119,6 +120,66 @@ function resolvePathInsideProject(projectRoot: string, targetPath: string): stri
   }
 
   return resolvedPath;
+}
+
+/**
+ * Review fix (Н-15): `resolvePathInsideProject` compares path strings only, so a
+ * symlink inside the project (`ln -s /etc x`) let reads and writes reach anything
+ * the server can. This resolves symlinks before the comparison: the deepest
+ * existing ancestor is `realpath`ed and the not-yet-existing tail appended.
+ * `followFinal: false` judges the entry itself rather than its target (delete,
+ * rename): a link inside the project may be removed, not followed. Returns the
+ * real path, so the operation acts on what was checked.
+ */
+async function resolveRealPathInsideProject(
+  projectRoot: string,
+  targetPath: string,
+  options: { followFinal?: boolean } = {},
+): Promise<string> {
+  const lexicalPath = resolvePathInsideProject(projectRoot, targetPath);
+  const realRoot = await realpath(projectRoot).catch(() => path.resolve(projectRoot));
+  const tail: string[] = options.followFinal === false ? [path.basename(lexicalPath)] : [];
+  let current = options.followFinal === false ? path.dirname(lexicalPath) : lexicalPath;
+  let realCurrent: string | null = null;
+  for (;;) {
+    try {
+      realCurrent = await realpath(current);
+      break;
+    } catch (error) {
+      const code = readErrorCode(error);
+      if (code !== 'ENOENT' && code !== 'ENOTDIR') throw error;
+      const parent = path.dirname(current);
+      if (parent === current) break;
+      tail.unshift(path.basename(current));
+      current = parent;
+    }
+  }
+  const candidate = realCurrent ? path.join(realCurrent, ...tail) : lexicalPath;
+  if (candidate !== realRoot && !candidate.startsWith(`${realRoot}${path.sep}`)) {
+    throw createFileTreeError('Path must be under project root', 403, 'PATH_OUTSIDE_PROJECT');
+  }
+  return candidate;
+}
+
+/**
+ * Review fix (Н-7): where keys and credentials live. The workspace-wide branch
+ * of `resolveReadablePath` never opens these folders or files, so a panel token
+ * alone cannot fetch `~/.mirage/auth.db` (its JWT secret), SSH keys or CLI
+ * logins. Other hidden folders (`.runs` with background output) stay readable.
+ */
+const PRIVATE_DIRECTORY_NAMES = new Set([
+  '.ssh', '.gnupg', '.mirage', '.cloudcli', '.claude-code-ui', '.aws', '.azure', '.kube', '.docker',
+  '.config', '.password-store', '.codex',
+]);
+const PRIVATE_FILE_PATTERNS = [
+  /^\.env(\..*)?$/i, /\.env$/i, /^id_(rsa|dsa|ecdsa|ed25519)(\.pub)?$/i, /\.(pem|key|p12|pfx)$/i, /^auth\.db/i,
+  /^\.credentials\.json$/i, /^\.claude\.json/i, /^\.(netrc|npmrc|pypirc|git-credentials)$/i, /_history$/i,
+];
+
+function isPrivateWorkspacePath(realWorkspaceRoot: string, realTargetPath: string): boolean {
+  const segments = path.relative(realWorkspaceRoot, realTargetPath).split(path.sep).filter(Boolean);
+  return segments.some((segment) => PRIVATE_DIRECTORY_NAMES.has(segment))
+    || PRIVATE_FILE_PATTERNS.some((pattern) => pattern.test(path.basename(realTargetPath)));
 }
 
 function expandWorkspacePath(workspaceRoot: string, inputPath: string): string {
@@ -424,12 +485,15 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
       }
 
       const workspacePath = await resolvePathUnderRoots(targetPath, [dependencies.workspace.rootPath]);
-      if (workspacePath) {
+      const realWorkspaceRoot = await realpath(dependencies.workspace.rootPath).catch(() => dependencies.workspace.rootPath);
+      // Review fix (Н-7): not keys, credentials or the panel's own database; inside the
+      // project such files stay readable through the project check below.
+      if (workspacePath && !isPrivateWorkspacePath(realWorkspaceRoot, workspacePath)) {
         return workspacePath;
       }
     }
 
-    return resolvePathInsideProject(projectRoot, targetPath);
+    return resolveRealPathInsideProject(projectRoot, targetPath);
   }
 
   async function cleanupTemporaryFiles(files: FileTreeUploadedFile[]): Promise<void> {
@@ -612,7 +676,7 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
 
     async saveTextFile(projectId, filePath, content) {
       const projectRoot = await resolveProjectRoot(projectId);
-      const resolvedPath = resolvePathInsideProject(projectRoot, filePath);
+      const resolvedPath = await resolveRealPathInsideProject(projectRoot, filePath);
       try {
         await fileSystem.writeTextFile(resolvedPath, content);
       } catch (error) {
@@ -654,7 +718,7 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
       const targetPath = input.parentPath
         ? path.join(input.parentPath, input.name)
         : input.name;
-      const resolvedPath = resolvePathInsideProject(projectRoot, targetPath);
+      const resolvedPath = await resolveRealPathInsideProject(projectRoot, targetPath);
 
       try {
         await fileSystem.access(resolvedPath);
@@ -698,7 +762,7 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
     async renameEntry(input) {
       validateFilename(input.newName);
       const projectRoot = await resolveProjectRoot(input.projectId);
-      const resolvedOldPath = resolvePathInsideProject(projectRoot, input.oldPath);
+      const resolvedOldPath = await resolveRealPathInsideProject(projectRoot, input.oldPath, { followFinal: false });
 
       try {
         await fileSystem.access(resolvedOldPath);
@@ -707,7 +771,7 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
       }
 
       const resolvedNewPath = path.join(path.dirname(resolvedOldPath), input.newName);
-      resolvePathInsideProject(projectRoot, resolvedNewPath);
+      await resolveRealPathInsideProject(projectRoot, resolvedNewPath, { followFinal: false });
       try {
         await fileSystem.access(resolvedNewPath);
         throw createFileTreeError(
@@ -740,7 +804,7 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
 
     async deleteEntry(input) {
       const projectRoot = await resolveProjectRoot(input.projectId);
-      const resolvedPath = resolvePathInsideProject(projectRoot, input.targetPath);
+      const resolvedPath = await resolveRealPathInsideProject(projectRoot, input.targetPath, { followFinal: false });
       let stats;
       try {
         stats = await fileSystem.stat(resolvedPath);
@@ -789,7 +853,7 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
           || input.targetPath === './'
           || path.resolve(projectRoot, input.targetPath) === path.resolve(projectRoot)
           ? path.resolve(projectRoot)
-          : resolvePathInsideProject(projectRoot, input.targetPath);
+          : await resolveRealPathInsideProject(projectRoot, input.targetPath);
 
         const plannedFiles: Array<{ file: FileTreeUploadedFile; fileName: string; destinationPath: string }> = [];
         for (let fileIndex = 0; fileIndex < input.files.length; fileIndex += 1) {
@@ -798,7 +862,7 @@ export function createFileTreeService(dependencies: FileTreeServiceDependencies)
           const destinationPath = path.join(resolvedTargetDirectory, fileName);
 
           try {
-            resolvePathInsideProject(projectRoot, destinationPath);
+            await resolveRealPathInsideProject(projectRoot, destinationPath);
           } catch (error) {
             if (error instanceof AppError && error.statusCode === 403) {
               await cleanupTemporaryFiles([file]);
