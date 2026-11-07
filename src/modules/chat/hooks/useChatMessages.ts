@@ -551,6 +551,16 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
         }
         break;
 
+      // Mirage: drawn as a notice where Anthropic's safeguards stopped the reply.
+      case 'safeguard_stopped':
+        converted.push({
+          type: 'assistant',
+          content: '',
+          timestamp: msg.timestamp,
+          safeguardStop: msg.safeguardStop ?? { category: null, explanation: null },
+        });
+        break;
+
       // Mirage: drawn as a quiet "stopped" mark under the turn it ended.
       case 'turn_stopped':
         converted.push({

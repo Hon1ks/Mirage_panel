@@ -248,6 +248,9 @@ export type MessageKind =
   // `system/api_retry`). Carries `apiRetry`; never in the transcript, so the
   // client shows «Claude не ответил · повторю через N с» only while it retries.
   | 'api_retry'
+  // Mirage: Anthropic's safeguards stopped the model's reply (`stop_reason:
+  // "refusal"`). Carries `safeguardStop`; drawn as a notice, not as a message.
+  | 'safeguard_stopped'
   // Mirage: an Artifact was published during the live turn. Carries
   // `artifact` (ArtifactSummary of the new version) and `toolId`; sent after
   // the panel stored its copy, so the client can open it beside the chat.
@@ -351,6 +354,18 @@ export type ApiRetryInfo = {
   error: string | null;
 };
 
+/**
+ * Mirage: a reply Anthropic's safeguards stopped (`stop_reason: "refusal"`), as
+ * the refused API response describes it in `stop_details`. `category` is
+ * `cyber`, `bio`… or null; `explanation` is Anthropic's prose, display only.
+ * Claude Code then retries once with a note to the model; the chat shows this
+ * notice instead of that note.
+ */
+export type SafeguardStopInfo = {
+  category: string | null;
+  explanation: string | null;
+};
+
 export type NormalizedMessage = {
   id: string;
   /**
@@ -401,6 +416,8 @@ export type NormalizedMessage = {
   compact?: CompactionInfo;
   /** Mirage: set on `api_retry` — the failed call and the coming retry. */
   apiRetry?: ApiRetryInfo;
+  /** Mirage: set on `safeguard_stopped` — why the reply was stopped. */
+  safeguardStop?: SafeguardStopInfo;
   images?: unknown;
   /** Non-image files attached to a user turn after provider history normalization. */
   files?: unknown;

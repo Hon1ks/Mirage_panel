@@ -96,6 +96,23 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
     return null;
   }
 
+  // Mirage: a reply Anthropic's safeguards stopped reads as one notice, not as an empty bubble.
+  if (message.safeguardStop) {
+    return (
+      <div
+        ref={messageRef}
+        data-message-timestamp={message.timestamp || undefined}
+        className="chat-message assistant px-3 sm:px-0"
+      >
+        <div className="py-0.5 text-xs text-amber-600 dark:text-amber-400">
+          Ответ остановлен фильтром Anthropic{message.safeguardStop.category ? ` · ${message.safeguardStop.category}` : ''}
+          <span aria-hidden className="text-muted-foreground/40"> · </span>
+          <span className="tabular-nums text-muted-foreground/50">{formattedTime}</span>
+        </div>
+      </div>
+    );
+  }
+
   // Mirage: a stopped turn reads as a quiet "stopped" mark — added live when
   // the turn ends aborted, and kept by history from the CLI's interruption row.
   if (message.isTurnStopped) {

@@ -1,4 +1,4 @@
-import type { ApiRetryInfo, ChatMessage } from '@/shared/types';
+import type { ApiRetryInfo, ChatMessage, SafeguardStopInfo } from '@/shared/types';
 import { isLikelyFilePath } from '@/modules/chat';
 import { toPanelWall } from '@/modules/kabina';
 import { plural } from '@/modules/kabina-chat/utils/chatFormat';
@@ -41,7 +41,9 @@ export type FeedItem =
   | { kind: 'artifact'; key: string; artifact: FeedArtifact; time: string }
   | { kind: 'stopped'; key: string; time: string; at: Date | null; stop: TurnStopSummary }
   | { kind: 'apiError'; key: string; time: string; at: number; error: ApiErrorKind; savedStep: number; retry: ApiRetryInfo | null; details: string }
-  | { kind: 'note'; key: string; text: string; tone: 'err' | 'mute' | 'run'; detail: string | null };
+  | { kind: 'note'; key: string; text: string; tone: 'err' | 'mute' | 'run'; detail: string | null }
+  /** Mirage: Anthropic's safeguards stopped Claude's reply here; replaces the note Claude Code leaves for the model. */
+  | { kind: 'safeguard'; key: string; time: string; stop: SafeguardStopInfo };
 
 /** What a hold-to-stop kept and cut (DarkStates C2): the step it stopped at, files edited before it, the step it cut. */
 export type TurnStopSummary = { step: number; editedFiles: number; interrupted: string | null };
@@ -440,6 +442,11 @@ export function buildChatFeed(messages: ChatMessage[], now: number = Date.now())
         retry: message.apiRetry,
         details: retryDetails(message.apiRetry),
       });
+      return;
+    }
+
+    if (message.safeguardStop) {
+      items.push({ kind: 'safeguard', key, time: formatClock(message.timestamp), stop: message.safeguardStop });
       return;
     }
 

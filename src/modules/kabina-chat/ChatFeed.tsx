@@ -340,6 +340,8 @@ const FeedRow = memo(function FeedRow({ item, isPhone, attached, isArtifactOpen,
           details={item.details}
         />
       );
+    case 'safeguard':
+      return <SafeguardNotice stop={item.stop} time={item.time} />;
     case 'note':
       return (
         <div className="kbc-note kb-m" data-tone={item.tone}>
@@ -359,6 +361,47 @@ const FeedRow = memo(function FeedRow({ item, isPhone, attached, isArtifactOpen,
       return null;
   }
 });
+
+/** The note Claude Code leaves for the model after a stopped reply; shown on request, never as the user's words. */
+const SAFEGUARD_MODEL_NOTE = 'Your response above was stopped by a safety classifier — this is not a tool or API error. '
+  + 'The rest of it was withheld, and tool calls in it that had not finished did not run. '
+  + 'Do not produce that content again, even reworded.';
+
+/** Only Anthropic's own pages become a link; the explanation comes from a transcript file. */
+const SAFEGUARD_LINK = /https:\/\/(?:support\.claude\.com|docs\.claude\.com|www\.anthropic\.com|claude\.ai)\/[^\s)]+/;
+
+/**
+ * A reply Anthropic's safeguards stopped (DarkStates-style quiet notice in the
+ * sand tone): the category, what it means for the turn, Anthropic's own link
+ * and, folded, the note Claude Code gave the model.
+ */
+function SafeguardNotice({ stop, time }: { stop: { category: string | null; explanation: string | null }; time: string }) {
+  const link = stop.explanation ? SAFEGUARD_LINK.exec(stop.explanation)?.[0] ?? null : null;
+  return (
+    <div className="kbc-safeguard" role="note">
+      <div className="kbc-safeguard-head kb-m">
+        <span aria-hidden>◆</span>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          Ответ остановлен фильтром Anthropic{stop.category ? ` · ${stop.category}` : ''}
+        </span>
+        <span className="kbc-safeguard-time">{time}</span>
+      </div>
+      <p className="kbc-safeguard-body">
+        Оборванный ответ не показан, начатые в нём действия не выполнены. Claude продолжил один раз
+        с пометкой не повторять это содержание — дальше в этом диалоге он может отвечать осторожнее.
+        Новый диалог начнётся с чистого листа.
+      </p>
+      <div className="kbc-safeguard-links kb-m">
+        {link && <a href={link} target="_blank" rel="noopener noreferrer">Почему так бывает ↗</a>}
+        <details>
+          <summary>служебный текст для модели</summary>
+          {stop.explanation && <span className="kbc-safeguard-raw">{stop.explanation}</span>}
+          <span className="kbc-safeguard-raw">{SAFEGUARD_MODEL_NOTE}</span>
+        </details>
+      </div>
+    </div>
+  );
+}
 
 type JournalProps = {
   steps: FeedStep[];

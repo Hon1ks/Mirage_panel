@@ -1561,6 +1561,64 @@ div.kbc-step-row {
   margin-top: 4px;
 }
 
+/* Ответ остановлен фильтром Anthropic (Mirage review) */
+
+.kbc-safeguard {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--kb-sand) 45%, transparent);
+  border-left: 3px solid var(--kb-sand);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--kb-sand) 8%, transparent);
+}
+
+.kbc-safeguard-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--kb-sand);
+}
+
+.kbc-safeguard-time {
+  color: var(--kb-soft);
+  text-transform: none;
+}
+
+.kbc-safeguard-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--kb-soft);
+}
+
+.kbc-safeguard-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  font-size: 11.5px;
+  color: var(--kb-soft);
+}
+
+.kbc-safeguard-links a {
+  color: var(--kb-sand);
+}
+
+.kbc-safeguard-links summary {
+  cursor: pointer;
+}
+
+.kbc-safeguard-raw {
+  display: block;
+  margin-top: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* Карточка артефакта в ленте */
 
 .kbc-artcard {

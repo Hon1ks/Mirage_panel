@@ -356,6 +356,17 @@ export type ApiRetryInfo = {
   error: string | null;
 };
 
+/**
+ * Mirage: why Anthropic's safeguards stopped a reply (`stop_details` of the
+ * refused API response): `category` such as `cyber` or `bio`, and Anthropic's
+ * `explanation` prose, both possibly null. The Kabina chat draws it as a notice
+ * in place of the note Claude Code leaves for the model.
+ */
+export type SafeguardStopInfo = {
+  category: string | null;
+  explanation: string | null;
+};
+
 /** Where a background task — a spawned agent, a workflow run or a backgrounded command — stands: `stopped` is one whose session process ended before it reported, so no outcome exists and none is coming. */
 export type BackgroundTaskStatus = 'running' | 'completed' | 'failed' | 'stopped';
 
@@ -423,6 +434,8 @@ export type ChatMessage = {
   compactSummary?: string;
   /** Mirage: the row is a live «API call failed, retrying» notice, not a message. */
   apiRetry?: ApiRetryInfo;
+  /** Mirage: the row is the notice of a reply Anthropic's safeguards stopped, not a message. */
+  safeguardStop?: SafeguardStopInfo;
   isSubagentContainer?: boolean;
   /** The agent this row spawned, when it spawned one. Its presence is what makes a row a subagent container. */
   subagent?: SubagentInfo;
@@ -592,6 +605,8 @@ export type NormalizedMessage = {
   compact?: CompactionInfo;
   /** Mirage: set on `api_retry` — the failed API call and the coming retry. */
   apiRetry?: ApiRetryInfo;
+  /** Mirage: set on `safeguard_stopped` — why the reply was stopped. */
+  safeguardStop?: SafeguardStopInfo;
   images?: Array<{ path?: string; data?: string; name?: string }>;
   files?: Array<{ path?: string; name?: string; mimeType?: string; size?: number }>;
   toolName?: string;
@@ -744,7 +759,9 @@ type MessageKind =
   // Mirage: a quiet "stopped" mark where a turn was stopped — from history, or added live when a turn ends aborted.
   | 'turn_stopped'
   // Mirage: a failed API call Claude Code is about to retry (live only); carries `apiRetry`.
-  | 'api_retry';
+  | 'api_retry'
+  // Mirage: Anthropic's safeguards stopped the model's reply; carries `safeguardStop`.
+  | 'safeguard_stopped';
 
 // ---------------------------
 

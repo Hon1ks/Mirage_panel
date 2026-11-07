@@ -146,3 +146,15 @@ test('API failures become E1 cards; a retry stays only until the reply resumes',
   assert.equal(folded.text, 'Claude не ответил · API 529 · перегружен');
   assert.equal(later.filter((item) => item.kind === 'apiError').length, 0);
 });
+
+test('a reply stopped by Anthropic safeguards is one notice, not a message (review)', () => {
+  const feed = buildChatFeed([
+    { type: 'user', content: 'Как работает бот панели?', timestamp: T(1) },
+    { type: 'assistant', content: '', timestamp: T(2), safeguardStop: { category: 'cyber', explanation: 'Cyber safeguards flagged this message.' } },
+    { type: 'assistant', content: 'Опишу по коду.', timestamp: T(3) },
+  ]);
+  const kinds = feed.items.map((item) => item.kind);
+  assert.deepEqual(kinds, ['user', 'safeguard', 'assistant']);
+  const notice = feed.items[1];
+  assert.equal(notice.kind === 'safeguard' && notice.stop.category, 'cyber');
+});

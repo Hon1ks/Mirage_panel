@@ -11,6 +11,7 @@ import type {
   FetchHistoryOptions,
   FetchHistoryResult,
   NormalizedMessage,
+  SafeguardStopInfo,
   SubagentActivity,
   SubagentInfo,
   TaskUsage,
@@ -982,6 +983,10 @@ const INTERNAL_CONTENT_PREFIXES = [
   'Caveat:',
   '[Request interrupted',
   'Base directory for this skill:',
+  // Mirage: the note Claude Code adds for the model after Anthropic's safeguards
+  // stopped a reply. Persisted with `isMeta: true`, unflagged on the live stream;
+  // the chat shows the `safeguard_stopped` notice in its place.
+  'Your response above was stopped by a safety classifier',
 ] as const;
 
 /**
@@ -1006,6 +1011,19 @@ function unwrapPastedContent(text: string): string {
 
   if (!unwrapped) return text;
   return result.replace(/^[\r\n]+|[\r\n]+$/g, '');
+}
+
+/**
+ * Reads `stop_details` of a refused API response (`{ type: 'refusal', category,
+ * explanation }`). Either field may be missing; long prose is cut so a crafted
+ * transcript cannot flood the chat.
+ */
+function readSafeguardStop(stopDetails: unknown): SafeguardStopInfo {
+  const details = readObjectRecord(stopDetails) ?? {};
+  const read = (value: unknown, limit: number) => (
+    typeof value === 'string' && value.trim() ? value.trim().slice(0, limit) : null
+  );
+  return { category: read(details.category, 40), explanation: read(details.explanation, 600) };
 }
 
 function isInternalContent(content: string): boolean {
@@ -1752,6 +1770,20 @@ export class ClaudeSessionsProvider implements IProviderSessions {
         isError: false,
       }));
       return messages;
+    }
+
+    // Mirage: Anthropic's safeguards stopped this reply. What it held is
+    // withheld (Claude Code says so to the model and retries once), so the row
+    // becomes one notice carrying the reason from `stop_details`.
+    if (raw.message?.role === 'assistant' && raw.message?.stop_reason === 'refusal') {
+      return [createNormalizedMessage({
+        id: `${baseId}_safeguard`,
+        sessionId,
+        timestamp: ts,
+        provider: PROVIDER,
+        kind: 'safeguard_stopped',
+        safeguardStop: readSafeguardStop(raw.message.stop_details),
+      })];
     }
 
     if (raw.message?.role === 'assistant' && raw.message?.content) {
