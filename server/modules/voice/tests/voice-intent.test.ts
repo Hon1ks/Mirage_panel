@@ -89,6 +89,18 @@ test('intent service uses the model answer when valid and drops unknown projects
   assert.equal(response.recipients.length, 2);
 });
 
+test('a message goes in the user\'s words, never the model\'s own question (review fix Н-18)', async () => {
+  const service = createVoiceIntentService({
+    listRecipients: () => [],
+    askModel: async () => ({ actions: [{ kind: 'message', summary: 'Уточнение', text: 'Не совсем понял, что нужно сделать. Можете повторить?' }] }),
+    now: () => new Date('2026-11-06T07:00:00Z'),
+  });
+  const result = await service.parse('как устроены уведомления в телеграм');
+  assert.equal(result.source, 'claude');
+  assert.equal(result.actions[0].kind, 'message');
+  assert.equal((result.actions[0] as { text: string }).text, 'как устроены уведомления в телеграм');
+});
+
 test('intent service falls back to rules when the model throws or answers garbage', async () => {
   for (const askModel of [async () => { throw new Error('offline'); }, async () => ({ nope: 1 }), async () => null]) {
     const service = createVoiceIntentService({ listRecipients: () => projects, askModel, now: () => NOW });

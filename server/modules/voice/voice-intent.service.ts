@@ -113,7 +113,7 @@ function validIso(value: unknown): string | null {
   return text && !Number.isNaN(Date.parse(text)) ? text : null;
 }
 
-function normalizeAction(raw: unknown, index: number, recipients: VoiceIntentRecipient[]): VoiceIntentAction | null {
+function normalizeAction(raw: unknown, index: number, recipients: VoiceIntentRecipient[], phrase: string): VoiceIntentAction | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const item = raw as Record<string, unknown>;
   const id = `a${index + 1}`;
@@ -146,7 +146,10 @@ function normalizeAction(raw: unknown, index: number, recipients: VoiceIntentRec
     };
   }
   if (item.kind === 'message') {
-    return { id, kind: 'message', confidence, summary: summary ?? 'Сообщение в диалог', text: asString(item.text) ?? '' };
+    // Review fix (Н-18): a message goes in the user's own words. The model only
+    // classifies; when it did not understand, it wrote its own clarifying
+    // question into `text`, and that went to the chat as if the user had said it.
+    return { id, kind: 'message', confidence, summary: summary ?? 'Сообщение в диалог', text: phrase };
   }
   return null;
 }
@@ -178,7 +181,7 @@ export function createVoiceIntentService(dependencies: VoiceIntentDependencies) 
         ? (modelAnswer as { actions?: unknown }).actions
         : null;
       const modelActions = Array.isArray(rawActions)
-        ? rawActions.map((raw, index) => normalizeAction(raw, index, recipients))
+        ? rawActions.map((raw, index) => normalizeAction(raw, index, recipients, text))
           .filter((action): action is VoiceIntentAction => action !== null)
         : [];
 
