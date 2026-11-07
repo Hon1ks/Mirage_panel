@@ -261,8 +261,14 @@ export function createKabinaFilesService(overrides: Partial<KabinaFilesDependenc
     async restoreEntry(input: { projectId: string; archivedPath: string; originalPath: string }): Promise<{ restoredPath: string }> {
       const projectRoot = await resolveProjectRoot(input.projectId);
       const archiveFiles = path.join(dependencies.archiveRoot, 'files');
-      const archived = path.resolve(input.archivedPath);
-      if (!isInside(archiveFiles, archived)) throw forbidden('Вернуть можно только из архива панели');
+      // Review fix (Н-9): the folder holding the entry is resolved, so a link
+      // archived earlier cannot carry «Вернуть» out to where it points. The entry
+      // itself may be a link: it is moved as a link.
+      const lexicalArchived = path.resolve(input.archivedPath);
+      const realArchiveFiles = await fs.realpath(archiveFiles).catch(() => archiveFiles);
+      const realParent = await fs.realpath(path.dirname(lexicalArchived)).catch(() => null);
+      const archived = realParent ? path.join(realParent, path.basename(lexicalArchived)) : lexicalArchived;
+      if (!isInside(realArchiveFiles, archived)) throw forbidden('Вернуть можно только из архива панели');
       if (!(await pathExists(archived))) throw notFound('В архиве этого уже нет');
       // A symlinked folder in the way must not carry the entry out of the project.
       const original = await resolveWriteTarget(path.resolve(input.originalPath));

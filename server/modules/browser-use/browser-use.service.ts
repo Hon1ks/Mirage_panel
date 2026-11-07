@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { randomBytes, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import { BlockList, isIP } from 'node:net';
 import path from 'node:path';
 
 // cross-spawn: drop-in spawn with Windows .cmd/PATHEXT resolution.
@@ -331,6 +332,35 @@ async function installRuntime(): Promise<{ success: boolean; message: string }> 
   }
 }
 
+/**
+ * Review fix (Н-13): addresses an agent's browser may not open — this machine,
+ * private networks and the cloud metadata service — so a page or a prompt
+ * injection cannot point Claude at the panel, other local services or
+ * `169.254.169.254`. Checked on the URL's own host; a public name that resolves
+ * to a private address and links clicked inside a page are not covered.
+ * `MIRAGE_BROWSER_ALLOW_PRIVATE=1` lifts it (e.g. to test a local dev server).
+ */
+const PRIVATE_ADDRESSES = (() => {
+  const list = new BlockList();
+  for (const [address, prefix] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8], ['169.254.0.0', 16], ['172.16.0.0', 12], ['192.168.0.0', 16]] as const) {
+    list.addSubnet(address, prefix, 'ipv4');
+  }
+  for (const [address, prefix] of [['::', 128], ['::1', 128], ['fc00::', 7], ['fe80::', 10]] as const) {
+    list.addSubnet(address, prefix, 'ipv6');
+  }
+  return list;
+})();
+
+/** Exported for the browser-use tests. */
+export function isPrivateBrowserHost(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return true;
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(host)?.[1];
+  const address = mapped ?? host;
+  const family = isIP(address);
+  return family !== 0 && PRIVATE_ADDRESSES.check(address, family === 4 ? 'ipv4' : 'ipv6');
+}
+
 function normalizeUrl(rawUrl: string): string {
   const trimmed = rawUrl.trim();
   if (!trimmed) {
@@ -343,6 +373,9 @@ function normalizeUrl(rawUrl: string): string {
   const parsed = new URL(withProtocol);
   if (!['http:', 'https:'].includes(parsed.protocol)) {
     throw new Error('Only http and https URLs are supported.');
+  }
+  if (readMirageEnv('BROWSER_ALLOW_PRIVATE') !== '1' && isPrivateBrowserHost(parsed.hostname)) {
+    throw new Error('This address is on the server or a private network; the agent browser does not open it.');
   }
 
   return parsed.toString();

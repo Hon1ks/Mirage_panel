@@ -1,3 +1,5 @@
+import { isIP } from 'node:net';
+
 import type { AuthLoginResult } from '@/shared/types.js';
 import { AppError, getPanelTimeZone, getPanelTimeZoneLabel } from '@/shared/utils.js';
 
@@ -44,6 +46,25 @@ type LoginContext = {
 // does not exist keeps the response time the same, so the timing does not
 // tell which usernames exist.
 const DUMMY_PASSWORD_HASH = '$2b$12$1y5P8Z2tjAwmO/o9YlXxeeQIcx586h3/SHJAtHH0SiR62rXF3aKu6';
+
+/**
+ * Review fix (Н-5): the address the sign-in lock counts against. An IPv6 client
+ * usually owns a whole /64 and can rotate within it at will, so v6 addresses
+ * count by their /64; IPv4 (and IPv4-mapped v6) stays per address.
+ */
+function throttleAddress(ipAddress: string | null): string {
+  if (!ipAddress) return 'unknown';
+  const mapped = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i.exec(ipAddress);
+  if (mapped) return mapped[1];
+  if (isIP(ipAddress) !== 6) return ipAddress;
+  const [head, tail = ''] = ipAddress.toLowerCase().split('::');
+  const headGroups = head ? head.split(':') : [];
+  const tailGroups = tail ? tail.split(':') : [];
+  const groups = ipAddress.includes('::')
+    ? [...headGroups, ...Array(Math.max(0, 8 - headGroups.length - tailGroups.length)).fill('0'), ...tailGroups]
+    : headGroups;
+  return `${groups.slice(0, 4).map((group) => group.replace(/^0+(?=.)/, '')).join(':')}::/64`;
+}
 
 function numericUserId(userId: number | bigint): number {
   return Number(userId);
@@ -143,7 +164,7 @@ export function createAuthService(dependencies: AuthDependencies) {
 
       // Mirage: five wrong passwords lock this username for fifteen minutes —
       // only for the address that guessed, so the owner elsewhere still gets in.
-      const throttleKey = `login:${username.trim().toLowerCase()}:${context.ipAddress ?? 'unknown'}`;
+      const throttleKey = `login:${username.trim().toLowerCase()}:${throttleAddress(context.ipAddress)}`;
       dependencies.security?.assertAttemptAllowed(throttleKey);
 
       const user = dependencies.users.getUserByUsername(username);

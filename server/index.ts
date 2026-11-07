@@ -147,6 +147,15 @@ createWebSocketServer(server, {
     getPluginPort,
 });
 
+// Review fix (Н-10): no framing by other sites (clickjacking), no MIME sniffing,
+// no full URLs in the Referer sent to other sites. Artifact frames set their own
+// stricter headers on top (their CSP allows framing by the panel only).
+app.use((_req, res, next) => {
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'same-origin');
+    next();
+});
 app.use(cors({ exposedHeaders: ['X-Refreshed-Token', 'X-Auth-Error'] }));
 app.use(express.json({
     limit: '50mb',

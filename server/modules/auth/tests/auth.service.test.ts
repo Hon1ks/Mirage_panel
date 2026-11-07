@@ -124,3 +124,30 @@ test('status reports the panel time zone (MIRAGE_TIMEZONE, the server zone by de
     }
   }
 });
+
+test('the sign-in lock counts an IPv6 client by its /64, IPv4 by address (review fix Н-5)', async () => {
+  const keys: string[] = [];
+  const security = {
+    assertAttemptAllowed: (key: string) => { keys.push(key); },
+    failAttempt: () => { throw new AppError('no', { code: 'AUTH_INVALID_CREDENTIALS', statusCode: 401 }); },
+    clearAttempts: () => undefined,
+  } as unknown as NonNullable<AuthDependencies['security']>;
+  const service = createAuthService(createDependencies({ security }));
+  const tryFrom = (ipAddress: string) => service.login('Owner', 'wrong', { userAgent: null, ipAddress }).catch(() => undefined);
+
+  await tryFrom('2001:db8:abcd:12:1::1');
+  await tryFrom('2001:0db8:abcd:0012:ffff:ffff:ffff:fffe');
+  await tryFrom('2001:db8:abcd:13::1');
+  await tryFrom('203.0.113.9');
+  await tryFrom('::ffff:203.0.113.9');
+  await tryFrom('203.0.113.10');
+
+  assert.deepEqual(keys, [
+    'login:owner:2001:db8:abcd:12::/64',
+    'login:owner:2001:db8:abcd:12::/64',
+    'login:owner:2001:db8:abcd:13::/64',
+    'login:owner:203.0.113.9',
+    'login:owner:203.0.113.9',
+    'login:owner:203.0.113.10',
+  ]);
+});

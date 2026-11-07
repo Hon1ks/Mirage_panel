@@ -43,8 +43,10 @@ const getProviderCommand = ({
     return customCommand;
   }
 
+  // Review fix (Н-16): the session that stays open after signing in must not
+  // run without permission prompts; a folder-trust question is the only cost.
   if (provider === 'claude') {
-    return 'claude --dangerously-skip-permissions /login';
+    return 'claude /login';
   }
 
   if (provider === 'cursor') {
@@ -59,7 +61,7 @@ const getProviderCommand = ({
     return 'opencode auth login';
   }
 
-  return 'claude --dangerously-skip-permissions /login';
+  return 'claude /login';
 };
 
 const getProviderTitle = (provider: LLMProvider) => {

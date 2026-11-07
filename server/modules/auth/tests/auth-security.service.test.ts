@@ -261,8 +261,9 @@ test('logins create sign-ins that can be listed, revoked and voided', async () =
     assert.equal(isTokenSessionActive({ userId, iat: nowSec, sid: secondSessionId }, clock.now), false);
     assert.throws(() => security.revokeSession(userId, firstSessionId, firstSessionId), AppError);
 
-    // A pre-Mirage token (no sid) works until «выйти везде» voids it.
-    assert.equal(isTokenSessionActive({ userId, iat: nowSec - 10 }, clock.now), true);
+    // A token without sid (CloudCLI's, or forged with a leaked secret) is refused (review fix Н-7).
+    assert.equal(isTokenSessionActive({ userId, iat: nowSec - 10 }, clock.now), false);
+    assert.equal(isTokenSessionActive({ userId, iat: nowSec + 3600 }, clock.now), false);
     const { token } = security.revokeOtherSessions(userId, firstSessionId, CONTEXT);
     assert.equal(token, `token:${firstSessionId}`);
     assert.equal(isTokenSessionActive({ userId, iat: nowSec - 3600 }, clock.now), false);

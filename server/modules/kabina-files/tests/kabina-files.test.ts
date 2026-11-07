@@ -139,6 +139,32 @@ test('«Вернуть» does not write through a symlinked folder to outside th
   });
 });
 
+test('«Вернуть» does not pull a file out through a link that was archived (review fix Н-9)', async () => {
+  await withWorkspace(async ({ root, project, archive, outside }) => {
+    await writeFile(path.join(outside, 'secret.txt'), 'чужой файл');
+    await symlink(outside, path.join(project, 'link'));
+    const service = serviceFor(root, project, archive);
+    // The link itself goes to the archive, still pointing outside.
+    const archived = await service.archiveEntry({ projectId: 'p1', path: 'link' });
+
+    await assert.rejects(
+      service.restoreEntry({
+        projectId: 'p1',
+        archivedPath: path.join(archived.archivedPath, 'secret.txt'),
+        originalPath: path.join(project, 'pulled.txt'),
+      }),
+      (error: unknown) => error instanceof AppError && error.statusCode === 403,
+    );
+    assert.equal(await readFile(path.join(outside, 'secret.txt'), 'utf8'), 'чужой файл');
+    await assert.rejects(readFile(path.join(project, 'pulled.txt')));
+
+    // The archived link itself can still come back as a link.
+    const restored = await service.restoreEntry({ projectId: 'p1', archivedPath: archived.archivedPath, originalPath: path.join(project, 'link') });
+    assert.equal(restored.restoredPath, path.join(project, 'link'));
+    assert.equal(await readFile(path.join(project, 'link', 'secret.txt'), 'utf8'), 'чужой файл');
+  });
+});
+
 test('page numbers in the query must be non-negative integers', () => {
   assert.equal(readPageNumber(undefined, 'offset'), undefined);
   assert.equal(readPageNumber('200', 'offset'), 200);

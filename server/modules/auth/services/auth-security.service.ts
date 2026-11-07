@@ -125,8 +125,12 @@ export function isTokenSessionActive(
   if (security?.tokens_valid_after && (claims.iat ?? 0) < security.tokens_valid_after) {
     return false;
   }
+  // Review fix (Н-7): every token Mirage issues names its sign-in. One without
+  // `sid` is either from CloudCLI (whose database, JWT secret included, the first
+  // start copies) or forged with a leaked secret; the sid lives only in the
+  // database, so requiring a live one keeps a stolen secret from minting access.
   if (!claims.sid) {
-    return true;
+    return false;
   }
   const session = store.getSession(claims.sid);
   if (!session || session.user_id !== claims.userId || session.revoked_at) {

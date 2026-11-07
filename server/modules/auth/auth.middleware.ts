@@ -32,9 +32,10 @@ const isSessionTokenUsable = (decoded) => {
       Date.now(),
     );
   } catch (error) {
-    // A database hiccup must not lock everyone out; the JWT itself is valid.
+    // Review fix (Н-1): fail closed. Without the database a revoked sign-in
+    // cannot be told from a live one, and the panel cannot work without it anyway.
     console.warn('Session check failed:', error instanceof Error ? error.message : String(error));
-    return true;
+    return false;
   }
 };
 
