@@ -1026,6 +1026,17 @@ function readSafeguardStop(stopDetails: unknown): SafeguardStopInfo {
   return { category: read(details.category, 40), explanation: read(details.explanation, 600) };
 }
 
+const SAFEGUARD_NOTE_PREFIX = 'Your response above was stopped by a safety classifier';
+
+/** True for Claude Code's note to the model after a stopped reply, as a string or text blocks. */
+function isSafeguardNote(content: unknown): boolean {
+  if (typeof content === 'string') return content.startsWith(SAFEGUARD_NOTE_PREFIX);
+  return Array.isArray(content)
+    && content.length > 0
+    && content.every((part: AnyRecord) => part?.type === 'text' && typeof part.text === 'string')
+    && String(content[0].text).startsWith(SAFEGUARD_NOTE_PREFIX);
+}
+
 function isInternalContent(content: string): boolean {
   return INTERNAL_CONTENT_PREFIXES.some((prefix) => content.startsWith(prefix));
 }
@@ -1521,6 +1532,21 @@ export class ClaudeSessionsProvider implements IProviderSessions {
     // way and stay hidden.
     if (raw.type === 'attachment' && raw.attachment?.type === 'queued_command') {
       return readSteeredPrompt(raw.attachment, { id: baseId, sessionId, timestamp: ts });
+    }
+
+    // Mirage: the note Claude Code leaves the model after a stopped reply is the
+    // one trace every such stop has — the refused reply itself is not always
+    // persisted. It becomes the same notice (the client folds it into the one
+    // the refused reply produced, when both arrive).
+    if (raw.message?.role === 'user' && isSafeguardNote(raw.message.content)) {
+      return [createNormalizedMessage({
+        id: `${baseId}_safeguard`,
+        sessionId,
+        timestamp: ts,
+        provider: PROVIDER,
+        kind: 'safeguard_stopped',
+        safeguardStop: { category: null, explanation: null },
+      })];
     }
 
     if (raw.message?.role === 'user' && raw.message?.content && raw.isMeta !== true) {

@@ -75,6 +75,9 @@ test('the note for the model is never shown as the user, live or from history', 
 
   for (const rows of [live, liveBlocks, persisted]) {
     assert.equal(rows.filter((row) => row.kind === 'text' && row.role === 'user').length, 0);
+    // The refused reply is not always persisted; the note alone still marks the stop.
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].kind, 'safeguard_stopped');
   }
 });
 

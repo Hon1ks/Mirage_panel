@@ -552,14 +552,21 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
         break;
 
       // Mirage: drawn as a notice where Anthropic's safeguards stopped the reply.
-      case 'safeguard_stopped':
-        converted.push({
-          type: 'assistant',
-          content: '',
-          timestamp: msg.timestamp,
-          safeguardStop: msg.safeguardStop ?? { category: null, explanation: null },
-        });
+      // The refused reply and Claude Code's note to the model both report one stop and
+      // arrive back to back: the second folds into the first, keeping whatever reason either carried.
+      case 'safeguard_stopped': {
+        const stop = msg.safeguardStop ?? { category: null, explanation: null };
+        const previous = converted[converted.length - 1];
+        if (previous?.safeguardStop) {
+          previous.safeguardStop = {
+            category: previous.safeguardStop.category ?? stop.category,
+            explanation: previous.safeguardStop.explanation ?? stop.explanation,
+          };
+          break;
+        }
+        converted.push({ type: 'assistant', content: '', timestamp: msg.timestamp, safeguardStop: stop });
         break;
+      }
 
       // Mirage: drawn as a quiet "stopped" mark under the turn it ended.
       case 'turn_stopped':
