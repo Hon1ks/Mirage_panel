@@ -21,6 +21,8 @@ export type VoiceDelivery =
   | { kind: 'calendar' }
   | { kind: 'session'; sessionId: string; projectId: string | null }
   | { kind: 'new-session'; projectId: string }
+  /** Review: the main assistant's own project (created on first use) — where it takes what it could not place. */
+  | { kind: 'assistant' }
   | { kind: 'none'; reason: string };
 
 /** One «Понял» card as both layouts render it. */
@@ -115,20 +117,24 @@ export function planDelivery(
       ? { kind: 'new-session', projectId: newProjectId }
       : { kind: 'none', reason: 'выбери проект в «Куда отправить»' };
   }
-  // Main assistant: each action by its own sense.
+  // Main assistant: each action by its own sense. Review: what it cannot place (an unknown
+  // project — a new one, say — or a message with no chat open) goes to its own project
+  // instead of nowhere; there Claude can set up a new project on request.
   if (action.kind === 'project_task') {
     const projectId = action.recipient?.projectId ?? context.projectId;
-    return projectId
-      ? { kind: 'new-session', projectId }
-      : { kind: 'none', reason: 'проект не понял — выбери в «Куда отправить»' };
+    return projectId ? { kind: 'new-session', projectId } : { kind: 'assistant' };
   }
   return context.sessionId
     ? { kind: 'session', sessionId: context.sessionId, projectId: context.projectId }
-    : { kind: 'none', reason: 'некуда отправить — открой чат или выбери проект' };
+    : { kind: 'assistant' };
 }
+
+/** Display name of the main assistant's own project, as the voice overlay creates it. */
+export const ASSISTANT_PROJECT_NAME = 'Главный ассистент';
 
 function deliveryRoute(delivery: VoiceDelivery, projects: KabinaProjectRef[]): string {
   if (delivery.kind === 'session') return 'в текущий диалог';
+  if (delivery.kind === 'assistant') return `новый диалог · ${ASSISTANT_PROJECT_NAME}`;
   if (delivery.kind === 'new-session') {
     const name = projectName(projects, delivery.projectId);
     return name ? `новый диалог · ${name}` : 'новый диалог';
@@ -181,7 +187,9 @@ export function buildCardView(
     ? projectName(projects, delivery.projectId)
     : delivery.kind === 'session' ? projectName(projects, delivery.projectId) : null;
   const isTask = action.kind === 'project_task';
-  const kicker = isTask
+  const kicker = delivery.kind === 'assistant'
+    ? `${isTask ? 'ЗАДАЧА' : 'СООБЩЕНИЕ'} · ${ASSISTANT_PROJECT_NAME.toUpperCase()}`
+    : isTask
     ? `ЗАДАЧА В ПРОЕКТ${project ? ` · ${project.toUpperCase()}` : ''}`
     : `СООБЩЕНИЕ В ДИАЛОГ${project ? ` · ${project.toUpperCase()}` : ''}`;
   return {
@@ -211,6 +219,22 @@ export function calendarTypeFor(eventType: Extract<VoiceIntentAction, { kind: 'c
 export function messageTextFor(action: VoiceIntentAction): string {
   if (action.kind === 'calendar_event') return action.title;
   return (action.text || action.summary).trim();
+}
+
+/**
+ * Review: the folder for the main assistant's project — `assistant` beside most of the
+ * existing projects (the panel's projects folder works out the same way), or
+ * `~/projects/assistant` when there are none.
+ */
+export function assistantProjectPath(projects: KabinaProjectRef[]): string {
+  const parents = new Map<string, number>();
+  for (const project of projects) {
+    if (!project.path) continue;
+    const parent = project.path.replace(/[\\/]+$/, '').replace(/[\\/][^\\/]+$/, '');
+    if (parent) parents.set(parent, (parents.get(parent) ?? 0) + 1);
+  }
+  const [best] = [...parents.entries()].sort((a, b) => b[1] - a[1]);
+  return `${best ? best[0] : '~/projects'}/assistant`;
 }
 
 /** Words of the phrase that the parse recognised (time phrase, names) — underlined in the transcript. */

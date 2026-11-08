@@ -1,7 +1,9 @@
 import { useCallback } from 'react';
 
 import {
+  ASSISTANT_PROJECT_NAME,
   VOICE_REMIND_BEFORE_MIN,
+  assistantProjectPath,
   calendarTypeFor,
   formatClock,
   formatDayShort,
@@ -73,17 +75,38 @@ export function useVoiceDelivery(projects: KabinaProjectRef[]) {
     if (!sendMessage({ type: 'chat.steer', sessionId, steerId, content, options: {} })) settle('offline');
   }), [sendMessage, subscribe]);
 
-  const startSession = useCallback(async (projectId: string, content: string) => {
-    const project = projects.find((candidate) => candidate.projectId === projectId);
-    if (!project?.path) throw new Error('проект не найден');
+  const openSession = useCallback(async (projectPath: string, content: string) => {
     const body = await readApiJson<{ data?: { sessionId?: string } }>(
-      await api.providers.createSession({ provider: 'claude', projectPath: project.path, initialMessage: content }),
+      await api.providers.createSession({ provider: 'claude', projectPath, initialMessage: content }),
     );
     const sessionId = body.data?.sessionId;
     if (!sessionId) throw new Error('сервер не дал id диалога');
     if (!sendMessage({ type: 'chat.send', sessionId, content, options: {} })) throw new Error('нет связи с панелью');
-    return { sessionId, projectName: project.displayName };
-  }, [projects, sendMessage]);
+    return sessionId;
+  }, [sendMessage]);
+
+  const startSession = useCallback(async (projectId: string, content: string) => {
+    const project = projects.find((candidate) => candidate.projectId === projectId);
+    if (!project?.path) throw new Error('проект не найден');
+    return { sessionId: await openSession(project.path, content), projectName: project.displayName };
+  }, [openSession, projects]);
+
+  /**
+   * Review: the main assistant's own project — found by its folder or name, created on
+   * first use (`POST /api/projects/create-project`, the same checks as the wizard).
+   */
+  const ensureAssistantProject = useCallback(async (): Promise<{ projectId: string; path: string }> => {
+    const folder = assistantProjectPath(projects);
+    const existing = projects.find((project) => project.path === folder || project.displayName === ASSISTANT_PROJECT_NAME);
+    if (existing?.path) return { projectId: existing.projectId, path: existing.path };
+    const body = await readApiJson<{ project?: { projectId?: string; fullPath?: string; path?: string } }>(
+      await api.createProject({ path: folder, customName: ASSISTANT_PROJECT_NAME }),
+    );
+    const projectId = body.project?.projectId;
+    const projectPath = body.project?.fullPath ?? body.project?.path;
+    if (!projectId || !projectPath) throw new Error('не удалось создать проект ассистента');
+    return { projectId, path: projectPath };
+  }, [projects]);
 
   const run = useCallback(async (cards: VoiceCardView[], actions: VoiceIntentAction[]): Promise<VoiceResult[]> => {
     const byId = new Map(actions.map((action) => [action.id, action]));
@@ -92,6 +115,7 @@ export function useVoiceDelivery(projects: KabinaProjectRef[]) {
     // Messages for one new dialog of one project go together, so «Новый диалог в проекте»
     // with two tasks opens one conversation, not two.
     const newSessionGroups = new Map<string, Array<{ card: VoiceCardView; action: VoiceIntentAction }>>();
+    const assistantGroup: Array<{ card: VoiceCardView; action: VoiceIntentAction }> = [];
 
     for (const card of cards) {
       const action = byId.get(card.id);
@@ -139,6 +163,31 @@ export function useVoiceDelivery(projects: KabinaProjectRef[]) {
         group.push({ card, action });
         newSessionGroups.set(delivery.projectId, group);
       }
+
+      if (delivery.kind === 'assistant') {
+        assistantGroup.push({ card, action });
+      }
+    }
+
+    // Review: what the main assistant could not place goes to its own project, one dialog for all.
+    if (assistantGroup.length > 0) {
+      const tasks = assistantGroup.map(({ action }) => messageTextFor(action)).join('\n\n');
+      const content = `${tasks}\n\n(Продиктовано голосом главному ассистенту — проект не определён. `
+        + 'Если для этого нужен новый проект, предложи имя папки рядом с остальными проектами и создай её после моего подтверждения.)';
+      try {
+        const assistant = await ensureAssistantProject();
+        const sessionId = await openSession(assistant.path, content);
+        for (const { card } of assistantGroup) {
+          results.push({
+            id: card.id, ok: true, state: 'run', title: `${card.title} — у главного ассистента`,
+            sub: `${ASSISTANT_PROJECT_NAME} · новый диалог`, href: chatHref(assistant.projectId, sessionId),
+          });
+        }
+      } catch (error) {
+        for (const { card } of assistantGroup) {
+          results.push({ id: card.id, ok: false, state: 'fail', title: card.title, sub: `не отправил: ${errorText(error)}` });
+        }
+      }
     }
 
     for (const [projectId, group] of newSessionGroups) {
@@ -164,7 +213,7 @@ export function useVoiceDelivery(projects: KabinaProjectRef[]) {
     // Keep the order of the cards.
     const order = new Map(cards.map((card, index) => [card.id, index]));
     return results.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
-  }, [sendToSession, startSession]);
+  }, [ensureAssistantProject, openSession, sendToSession, startSession]);
 
   /** «Отменить всё»: removes the calendar events this run created; sent messages stay sent. */
   const undoCalendar = useCallback(async (results: VoiceResult[]) => {

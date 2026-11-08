@@ -10,6 +10,7 @@ import {
   destinationLabel,
   formatTimer,
   markedWordIndexes,
+  assistantProjectPath,
   planDelivery,
   recognizedEntities,
 } from '@/modules/kabina-voice/utils/voiceActionPlan';
@@ -62,8 +63,9 @@ test('tasks and messages follow the addressee', () => {
   // Main assistant: a task goes to its own project, a message to the open chat.
   assert.deepEqual(planDelivery(TASK, 'main', HOME, null), { kind: 'new-session', projectId: 'p-mir' });
   assert.deepEqual(planDelivery({ ...TASK, recipient: null }, 'main', CHAT, null), { kind: 'new-session', projectId: 'p-zag' });
-  assert.equal(planDelivery({ ...TASK, recipient: null }, 'main', HOME, null).kind, 'none');
-  assert.equal(planDelivery(MESSAGE, 'main', HOME, null).kind, 'none');
+  // Review: what the main assistant cannot place goes to its own project, not nowhere.
+  assert.deepEqual(planDelivery({ ...TASK, recipient: null }, 'main', HOME, null), { kind: 'assistant' });
+  assert.deepEqual(planDelivery(MESSAGE, 'main', HOME, null), { kind: 'assistant' });
 });
 
 test('cards read like the mock-ups', () => {
@@ -79,9 +81,11 @@ test('cards read like the mock-ups', () => {
   assert.equal(task.kicker, 'ЗАДАЧА В ПРОЕКТ · ПАНЕЛЬ МИРАЖ');
   assert.equal(task.whenSmall, 'новый диалог · Панель Мираж');
 
-  const stuck = buildCardView(MESSAGE, 'main', HOME, null, PROJECTS);
-  assert.equal(stuck.runnable, false);
-  assert.match(stuck.meta, /некуда отправить/);
+  const toAssistant = buildCardView(MESSAGE, 'main', HOME, null, PROJECTS);
+  assert.equal(toAssistant.runnable, true);
+  assert.equal(toAssistant.kicker, 'СООБЩЕНИЕ · ГЛАВНЫЙ АССИСТЕНТ');
+  assert.equal(toAssistant.whenSmall, 'новый диалог · Главный ассистент');
+  assert.equal(buildCardView(MESSAGE, 'chat', HOME, null, PROJECTS).runnable, false, 'an explicit «Текущий диалог» still needs an open chat');
 });
 
 test('recognised words are underlined and «уже распознал» lists what the parse found', () => {
@@ -89,6 +93,15 @@ test('recognised words are underlined and «уже распознал» lists wh
   assert.deepEqual([...markedWordIndexes(phrase, [CALL])].sort((a, b) => a - b), [1, 3, 5]);
   const entities = recognizedEntities([CALL, TASK]).map((entity) => `${entity.label}:${entity.value}`);
   assert.deepEqual(entities, ['КОГДА:вт 27.10', 'ВРЕМЯ:11:00', 'ДЕЛО:звонок · Андрей', 'ЗАДАЧА:Подготовить план звонка']);
+});
+
+test('the assistant project sits beside most projects, or in ~/projects (review)', () => {
+  assert.equal(assistantProjectPath([
+    { projectId: 'a', displayName: 'A', path: '/root/projects/a', isStarred: false },
+    { projectId: 'b', displayName: 'B', path: '/root/projects/b/', isStarred: false },
+    { projectId: 'c', displayName: 'C', path: '/srv/c', isStarred: false },
+  ]), '/root/projects/assistant');
+  assert.equal(assistantProjectPath([]), '~/projects/assistant');
 });
 
 test('small helpers: timer and calendar type', () => {

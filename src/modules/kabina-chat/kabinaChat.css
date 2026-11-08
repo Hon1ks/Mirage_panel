@@ -5551,3 +5551,28 @@ html[data-kb-keyboard] .kbc-pcomposer {
     animation: none;
   }
 }
+
+/* Модель в шапке телефонного чата (review) */
+
+.kbc-pmodel-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  max-width: 96px;
+  padding: 5px 8px;
+  border: 1px solid var(--kb-line);
+  border-radius: 4px;
+  background: none;
+  color: var(--kb-soft);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kbc-pmodel-chip:active {
+  border-color: var(--kb-signal);
+  color: var(--kb-head);
+}

@@ -215,8 +215,14 @@ function LimitsPanel({ limits, titleId }: { limits: SubscriptionLimits | null; t
     return () => window.clearInterval(timer);
   }, []);
 
-  // Mirage: no «Сессия · 5 ч» row — the plan has no 5-hour window any more (`five_hour: null`).
   const rows: Array<{ key: string; name: string; big: string; unit: string; percent: number; tone: 'auto' | 'sand'; note: string }> = [];
+  // Review: the 5-hour window, when the plan has one (Pro does; Max answers `five_hour: null`).
+  if (limits?.session) {
+    rows.push({
+      key: 's', name: 'Сессия · 5 часов', big: String(Math.round(limits.session.percent)), unit: '%', percent: limits.session.percent, tone: 'auto',
+      note: resetText(limits.session.resetsAt, now),
+    });
+  }
   if (limits?.weekly) {
     const byModel = limits.weeklyByModel.filter((item) => item.percent >= 1).map((item) => `${item.model} ${Math.round(item.percent)}%`).join(' · ');
     rows.push({
@@ -370,11 +376,24 @@ export function KabinaHud({ isPhone, left, center, extra, sticky = false }: Kabi
 
   const hasNumbers = Boolean(limits && limits.status !== 'unavailable');
   const weekly = hasNumbers ? limits?.weekly ?? null : null;
+  const session = hasNumbers ? limits?.session ?? null : null;
   const credits = hasNumbers ? limits?.credits ?? null : null;
   const pct = (value: number | null | undefined) => (typeof value === 'number' ? String(Math.round(value)) : '—');
 
   const meters = (
     <div ref={limitsRef} className="kb-hud-limits">
+      {session && (
+        <HudMeter
+          label="5Ч"
+          value={pct(session.percent)}
+          unit="%"
+          percent={session.percent}
+          ariaLabel={`Сессия 5 часов: ${Math.round(session.percent)} %, ${resetText(session.resetsAt, Date.now())}`}
+          isPhone={isPhone}
+          expanded={isLimitsOpen}
+          onClick={toggleLimits}
+        />
+      )}
       <HudMeter
         label="НЕД"
         value={pct(weekly?.percent)}

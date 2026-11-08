@@ -666,6 +666,19 @@ export default function KabinaChatScreen(props: KabinaChatScreenProps) {
               </span>
               <ChevronDown size={12} className="kbc-chev" />
             </button>
+            {/* Review: the model was reachable only through the «КТКСТ» sheet; one tap opens it here. */}
+            <button
+              type="button"
+              className="kbc-pmodel-chip kb-m"
+              aria-label={`Модель: ${modelName} — сменить`}
+              onClick={() => {
+                setIsSheetOpen(true);
+                setIsPhoneModelOpen(true);
+              }}
+            >
+              {modelName.toUpperCase()}
+              <ChevronDown size={10} />
+            </button>
             <NotificationBell isPhone />
           </header>
           <ChatHud

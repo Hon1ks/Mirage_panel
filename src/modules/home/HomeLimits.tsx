@@ -29,8 +29,20 @@ const UNAVAILABLE_TEXT: Record<NonNullable<SubscriptionLimits['reason']>, string
 /** Х18 «Лимиты» (DarkMain 05 / DarkPhoneMain 03): the week and credits needles and the week's pace. */
 export default function HomeLimits({ index, limits, now, isPhone, onOpenDetails }: HomeLimitsProps) {
   const hasNumbers = Boolean(limits && limits.status !== 'unavailable');
-  // Mirage: no 5-hour «Сессия» dial — the plan has no 5-hour window any more (`five_hour: null`).
-  const gauges: GaugeSpec[] = [
+  const gauges: GaugeSpec[] = [];
+  // Review: the 5-hour «Сессия» window, when the plan has one (Pro does; Max answers `five_hour: null`).
+  if (limits?.session) {
+    const resetAt = limits.session.resetsAt ? new Date(limits.session.resetsAt) : null;
+    const clock = resetAt && !Number.isNaN(resetAt.getTime()) ? ` · в ${formatClock(resetAt)}` : '';
+    gauges.push({
+      key: 'session',
+      name: 'Сессия · 5 ч',
+      caption: `${formatReset(limits.session.resetsAt, now)}${isPhone ? '' : clock}`,
+      percent: limits.session.percent,
+      tone: 'signal',
+    });
+  }
+  gauges.push(
     {
       key: 'weekly',
       name: 'Неделя',
@@ -40,7 +52,7 @@ export default function HomeLimits({ index, limits, now, isPhone, onOpenDetails 
       percent: limits?.weekly?.percent ?? null,
       tone: 'signal',
     },
-  ];
+  );
   // No credits source → no third dial, per Х18.
   if (limits?.credits) {
     const expires = formatShortDay(limits.credits.resetsAt);
