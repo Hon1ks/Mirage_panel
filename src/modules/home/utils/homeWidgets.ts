@@ -2,10 +2,10 @@ import type { MirageSettings, MirageWidgetId } from '@/shared/types';
 
 type WidgetSetting = MirageSettings['home']['widgets'][number];
 
-/** The widgets the home screen can draw today; «Заявки», «Сервер» and «Кнопки выкладки» have no block yet. */
-export type HomeWidgetId = Extract<MirageWidgetId, 'fav' | 'work' | 'cal' | 'lim'>;
+/** The widgets the home screen can draw today; «Заявки» and «Кнопки выкладки» have no block yet. */
+export type HomeWidgetId = Extract<MirageWidgetId, 'fav' | 'work' | 'cal' | 'lim' | 'server'>;
 
-const DRAWN: ReadonlyArray<HomeWidgetId> = ['fav', 'work', 'cal', 'lim'];
+const DRAWN: ReadonlyArray<HomeWidgetId> = ['fav', 'work', 'cal', 'lim', 'server'];
 /** Wide blocks live in the left column of the desktop layout, narrow ones in the right. */
 const MAIN_COLUMN: ReadonlyArray<HomeWidgetId> = ['fav', 'work'];
 

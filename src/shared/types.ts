@@ -2059,6 +2059,23 @@ export type ProjectPathCheck = {
   existingProject: { projectId: string; displayName: string; isArchived: boolean } | null;
 };
 
+/**
+ * The home «Сервер» widget from `api.home.server`: load averages and CPU count,
+ * memory (available counts reclaimable cache), swap and the root disk (null when
+ * unreadable), uptime and the systemd services listed in the server's
+ * `MIRAGE_HOME_SERVICES` with their `systemctl is-active` state.
+ */
+export type ServerStatus = {
+  uptimeSec: number;
+  load: [number, number, number];
+  cpus: number;
+  memory: { totalBytes: number; availableBytes: number };
+  swap: { totalBytes: number; freeBytes: number } | null;
+  disk: { totalBytes: number; freeBytes: number } | null;
+  services: Array<{ name: string; state: string }>;
+  readAt: string;
+};
+
 /** One usage window of the subscription: percent used and when it resets (ISO). */
 export type SubscriptionLimitWindow = { percent: number; resetsAt: string | null };
 

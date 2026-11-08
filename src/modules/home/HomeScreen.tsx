@@ -8,12 +8,14 @@ import HomeActivityList from '@/modules/home/HomeActivityList';
 import HomeCalendar from '@/modules/home/HomeCalendar';
 import HomeFavorites from '@/modules/home/HomeFavorites';
 import HomeLimits from '@/modules/home/HomeLimits';
+import HomeServer from '@/modules/home/HomeServer';
 import HomeLog from '@/modules/home/HomeLog';
 import HomeSummary from '@/modules/home/HomeSummary';
 import HomeWaitingCard from '@/modules/home/HomeWaitingCard';
 import { calendarItemsToHomeEvents } from '@/modules/home/utils/homeCalendarEvents';
 import { greetingName } from '@/modules/home/utils/homeFormatting';
 import { layoutHomeWidgets } from '@/modules/home/utils/homeWidgets';
+import { useServerStatus } from '@/modules/home/hooks/useServerStatus';
 import type { HomeWidgetSlot } from '@/modules/home/utils/homeWidgets';
 import { useHomeWidgets } from '@/modules/home/hooks/useHomeWidgets';
 import { useNow } from '@/modules/home/hooks/useNow';
@@ -174,6 +176,9 @@ export function HomeScreen({
   // Without the server's limits counter the «Лимиты» block is not drawn at all.
   const limitsEnabled = isSubscriptionLimitsEnabled(limits);
   const layout = useMemo(() => layoutHomeWidgets(widgetSettings, isMobile, limitsEnabled), [widgetSettings, isMobile, limitsEnabled]);
+  // The «Сервер» widget is polled only while it is on screen.
+  const serverWidgetOn = [...layout.column, ...layout.main, ...layout.aside].some((slot) => slot.id === 'server');
+  const serverStatus = useServerStatus(serverWidgetOn);
 
   const renderWidget = (slot: HomeWidgetSlot, isPhone: boolean) => {
     switch (slot.id) {
@@ -197,6 +202,8 @@ export function HomeScreen({
         return <HomeCalendar key="cal" index={slot.index} scheduled={calendarEvents} now={now} isPhone={isPhone} onOpenSession={onOpenSession} onAddEvent={onOpenCalendar} onOpenEvent={openCalendarEvent} />;
       case 'lim':
         return <HomeLimits key="lim" index={slot.index} limits={limits} now={now} isPhone={isPhone} onOpenDetails={onOpenLimits} />;
+      case 'server':
+        return <HomeServer key="server" index={slot.index} status={serverStatus} isPhone={isPhone} />;
       default:
         return null;
     }

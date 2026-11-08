@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 
 import { homeOverviewService } from '@/modules/home/services/home-overview.service.js';
 import { projectsFolderService } from '@/modules/home/services/projects-folder.service.js';
+import { serverStatusService } from '@/modules/home/services/server-status.service.js';
 import { subscriptionLimitsService } from '@/modules/home/services/subscription-limits.service.js';
 import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
 
@@ -62,6 +63,14 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const folderPath = typeof req.query.path === 'string' ? req.query.path : '';
     res.json(createApiSuccessResponse(await projectsFolderService.describeFolder(folderPath)));
+  }),
+);
+
+// The «Сервер» widget: load, memory, swap, disk, uptime and the listed services (read-only).
+router.get(
+  '/server',
+  asyncHandler(async (_req: Request, res: Response) => {
+    res.json(createApiSuccessResponse(await serverStatusService.getStatus()));
   }),
 );
 

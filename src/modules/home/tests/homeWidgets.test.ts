@@ -21,6 +21,18 @@ describe('layoutHomeWidgets (DarkSettings 03 on the home screen)', () => {
     expect(layout.aside).toEqual([{ id: 'cal', index: '04' }, { id: 'lim', index: '05' }]);
   });
 
+  it('draws «Сервер» in the side column when it is on (review)', () => {
+    const layout = layoutHomeWidgets([
+      { id: 'fav', enabled: true },
+      { id: 'server', enabled: true },
+      { id: 'cal', enabled: true },
+      { id: 'deploy', enabled: true },
+    ], false);
+    expect(layout.aside.map((slot) => slot.id)).toEqual(['server', 'cal']);
+    const phone = layoutHomeWidgets([{ id: 'server', enabled: true }, { id: 'leads', enabled: true }], true);
+    expect(phone.column).toEqual([{ id: 'server', index: '01' }]);
+  });
+
   it('follows the saved order and drops disabled and not-yet-drawn widgets', () => {
     const layout = layoutHomeWidgets([
       { id: 'lim', enabled: true },

@@ -357,6 +357,8 @@ export const api = {
     overview: (tzOffset: number) => get(`/api/home/overview${query({ tzOffset })}`),
     // Served from a one-minute server cache; the OAuth token never reaches the browser.
     limits: () => get('/api/home/limits'),
+    // The «Сервер» widget: load, memory, disk, uptime, listed services (10 s server cache).
+    server: () => get('/api/home/server'),
     // «Все проекты»: every project (archived too) with stats and folder suggestions.
     projects: (tzOffset: number) => get(`/api/home/projects${query({ tzOffset })}`),
     // The wizard's file count and branch for a typed folder (null outside the workspace).
