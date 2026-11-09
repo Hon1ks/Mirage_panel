@@ -224,10 +224,16 @@ function LimitsPanel({ limits, titleId }: { limits: SubscriptionLimits | null; t
     });
   }
   if (limits?.weekly) {
-    const byModel = limits.weeklyByModel.filter((item) => item.percent >= 1).map((item) => `${item.model} ${Math.round(item.percent)}%`).join(' · ');
     rows.push({
       key: 'w', name: 'Неделя · все модели', big: String(Math.round(limits.weekly.percent)), unit: '%', percent: limits.weekly.percent, tone: 'auto',
-      note: `${resetText(limits.weekly.resetsAt, now)}${byModel ? ` · ${byModel}` : ''}`,
+      note: resetText(limits.weekly.resetsAt, now),
+    });
+  }
+  // Review: each per-model weekly window as its own row (0 % too — CloudCLI shows «Weekly — Fable» the same way).
+  for (const scoped of limits?.weeklyByModel ?? []) {
+    rows.push({
+      key: `w-${scoped.model}`, name: `Неделя · ${scoped.model}`, big: String(Math.round(scoped.percent)), unit: '%', percent: scoped.percent, tone: 'sand',
+      note: resetText(scoped.resetsAt, now),
     });
   }
   if (limits?.credits) {

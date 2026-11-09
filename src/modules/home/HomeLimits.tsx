@@ -53,6 +53,16 @@ export default function HomeLimits({ index, limits, now, isPhone, onOpenDetails 
       tone: 'signal',
     },
   );
+  // Review: per-model weekly windows (e.g. «Неделя · Fable»), shown even at 0 % — the plan has them.
+  for (const scoped of limits?.weeklyByModel ?? []) {
+    gauges.push({
+      key: `weekly-${scoped.model}`,
+      name: `Неделя · ${scoped.model}`,
+      caption: formatReset(scoped.resetsAt, now),
+      percent: scoped.percent,
+      tone: 'sand',
+    });
+  }
   // No credits source → no third dial, per Х18.
   if (limits?.credits) {
     const expires = formatShortDay(limits.credits.resetsAt);
@@ -85,7 +95,7 @@ export default function HomeLimits({ index, limits, now, isPhone, onOpenDetails 
       {limits && !hasNumbers ? (
         <p className="mh-note kb-pretty" style={{ margin: 0 }}>{UNAVAILABLE_TEXT[limits.reason ?? 'upstream-error']}</p>
       ) : (
-        <div className="mh-gauges" aria-busy={limits ? undefined : true} style={{ gridTemplateColumns: `repeat(${gauges.length}, minmax(0, 1fr))` }}>
+        <div className="mh-gauges" aria-busy={limits ? undefined : true} style={{ gridTemplateColumns: `repeat(${Math.min(gauges.length, 3)}, minmax(0, 1fr))` }}>
           {gauges.map((spec) => (
             <Gauge
               key={spec.key}

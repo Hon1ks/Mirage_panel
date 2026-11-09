@@ -184,6 +184,7 @@ test('missing credentials, an expired token and a 401 each explain themselves', 
       fetched = true;
       return okResponse(USAGE_RESPONSE);
     },
+    renewCredentials: async () => undefined,
   }).getLimits();
   assert.equal(expired.reason, 'token-expired');
   assert.equal(fetched, false, 'an expired token is not sent upstream');
@@ -192,6 +193,7 @@ test('missing credentials, an expired token and a 401 each explain themselves', 
     now: () => NOW,
     readCredentialsFile: async () => credentialsJson(),
     fetchUsage: async () => ({ ok: false, status: 401, json: async () => ({}) }),
+    renewCredentials: async () => undefined,
   }).getLimits();
   assert.equal(rejected.status, 'unavailable');
   assert.equal(rejected.reason, 'token-expired');
@@ -245,4 +247,30 @@ test('numbers saved before a restart are shown when the first refresh is refused
   }).getLimits();
   assert.equal(restarted.status, 'stale');
   assert.equal(restarted.session?.percent, 27);
+});
+
+test('an expired token is renewed by Claude Code itself, at most once per 10 minutes (review)', async () => {
+  let now = NOW;
+  let expiresAt = NOW - 1000;
+  let renewals = 0;
+  const service = createSubscriptionLimitsService({
+    isEnabled: () => true,
+    now: () => now,
+    readCredentialsFile: async () => credentialsJson({ expiresAt }),
+    fetchUsage: async () => okResponse(USAGE_RESPONSE),
+    renewCredentials: async () => {
+      renewals += 1;
+      expiresAt = now + 8 * 3600_000;
+    },
+  });
+  const renewed = await service.getLimits();
+  assert.equal(renewed.status, 'ok');
+  assert.equal(renewals, 1);
+
+  // Expired again within ten minutes and Claude Code could not renew: no second call, stale numbers.
+  expiresAt = now - 1;
+  now += 2 * 60_000;
+  const stale = await service.getLimits();
+  assert.equal(renewals, 1);
+  assert.equal(stale.status, 'stale');
 });

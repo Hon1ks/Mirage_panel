@@ -51,7 +51,7 @@ function renderHud(isPhone: boolean, live = { runningCount: 3, working: 2, waiti
   );
 }
 
-test('the computer HUD shows НЕД / $ coloured by fill, the live summary and the bell — no 5Ч', async () => {
+test('the computer HUD shows 5Ч / НЕД / $ coloured by fill, the live summary and the bell', async () => {
   renderHud(false);
   const hud = screen.getByRole('navigation', { name: 'Приборная строка' });
   const week = await within(hud).findByRole('button', { name: /^Неделя: 86 %/ });
@@ -61,9 +61,9 @@ test('the computer HUD shows НЕД / $ coloured by fill, the live summary and t
   assert.match(hud.textContent ?? '', /работают 2/);
   assert.match(hud.textContent ?? '', /ждёт тебя 1/);
   assert.ok(within(hud).getByRole('button', { name: /Уведомления/ }));
-  // The plan has no 5-hour window: even a `session` from the server is not drawn.
-  assert.equal(within(hud).queryByRole('button', { name: /Сессия|сессии/ }), null);
-  assert.doesNotMatch(hud.textContent ?? '', /5Ч/);
+  // Review: a 5-hour window the server reports is drawn (Pro has one; Max answers null).
+  assert.ok(within(hud).getByRole('button', { name: /^Сессия 5 часов/ }));
+  assert.match(hud.textContent ?? '', /5Ч/);
   assert.deepEqual(within(hud).getAllByRole('button', { name: /^(Неделя|Кредиты)/ }).length, 2);
 });
 
@@ -75,7 +75,7 @@ test('an instrument opens the limits panel with resets and the week pace; Esc cl
   assert.match(panel.textContent ?? '', /ЛИМИТЫ · MAX 20×/);
   assert.match(panel.textContent ?? '', /Неделя · все модели/);
   assert.match(panel.textContent ?? '', /Темп недели/);
-  assert.doesNotMatch(panel.textContent ?? '', /Сессия|5 ч\b/, 'no 5-hour row');
+  assert.match(panel.textContent ?? '', /Сессия · 5 часов/, 'the 5-hour row (review)');
   assert.equal(week.getAttribute('aria-expanded'), 'true');
   fireEvent.keyDown(document, { key: 'Escape' });
   await waitFor(() => assert.equal(screen.queryByRole('dialog', { name: 'Лимиты подписки' }), null));

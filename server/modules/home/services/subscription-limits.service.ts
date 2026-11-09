@@ -1,7 +1,9 @@
+import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import { resolveClaudeCodeExecutablePath } from '@/shared/claude-cli-path.js';
 import { getMirageDataDir, isSubscriptionLimitsSwitchOn } from '@/shared/utils.js';
 
 /**
@@ -19,6 +21,9 @@ const CACHE_TTL_MS = 60_000;
  */
 const BACKOFF_BASE_MS = 2 * 60_000;
 const BACKOFF_MAX_MS = 15 * 60_000;
+/** Review: at most one «ask Claude Code to renew the token» per this interval. */
+const RENEW_INTERVAL_MS = 10 * 60_000;
+const RENEW_TIMEOUT_MS = 30_000;
 const REQUEST_TIMEOUT_MS = 10_000;
 /** Buckets that are already shown as the session / weekly gauges. */
 const KNOWN_WINDOW_KEYS = new Set(['five_hour', 'seven_day']);
@@ -56,6 +61,13 @@ type SubscriptionLimitsDependencies = {
   /** Last good numbers kept across restarts, so a refused first refresh still shows them. */
   readSnapshot(): Promise<string | null>;
   writeSnapshot(text: string): Promise<void>;
+  /**
+   * Review: lets Claude Code renew its own OAuth token (`claude auth status` does,
+   * with the CLI's own locking). The panel never writes the credentials file or
+   * uses the refresh token itself: two refreshers racing could burn a one-time
+   * refresh token and sign Claude out.
+   */
+  renewCredentials(): Promise<void>;
   now(): number;
 };
 
@@ -76,6 +88,10 @@ const defaultDependencies: SubscriptionLimitsDependencies = {
     }),
   readSnapshot: async () => null,
   writeSnapshot: async () => {},
+  renewCredentials: () => new Promise((resolve) => {
+    const executable = resolveClaudeCodeExecutablePath(process.env.CLAUDE_CLI_PATH) || 'claude';
+    execFile(executable, ['auth', 'status'], { timeout: RENEW_TIMEOUT_MS }, () => resolve());
+  }),
   now: () => Date.now(),
 };
 
@@ -220,6 +236,15 @@ export function createSubscriptionLimitsService(overrides: Partial<SubscriptionL
   // Refused refreshes in a row and how long to wait after the latest one.
   let refusals = 0;
   let waitMs = CACHE_TTL_MS;
+  let lastRenewAt = Number.NEGATIVE_INFINITY;
+
+  /** Asks Claude Code to renew an expired token, at most once per interval; true when it was asked. */
+  const renewOnce = async (): Promise<boolean> => {
+    if (dependencies.now() - lastRenewAt < RENEW_INTERVAL_MS) return false;
+    lastRenewAt = dependencies.now();
+    await dependencies.renewCredentials().catch(() => undefined);
+    return true;
+  };
 
   const loadSnapshot = async () => {
     if (snapshotLoaded) return;
@@ -243,23 +268,32 @@ export function createSubscriptionLimitsService(overrides: Partial<SubscriptionL
   const refresh = async (): Promise<SubscriptionLimits> => {
     waitMs = CACHE_TTL_MS;
     await loadSnapshot();
-    let rawCredentials: string;
-    try {
-      rawCredentials = await dependencies.readCredentialsFile();
-    } catch {
-      return fail('no-credentials', null);
-    }
-    const credentials = parseSubscriptionCredentials(rawCredentials, dependencies.now());
+    const readCredentials = async () => {
+      try {
+        return parseSubscriptionCredentials(await dependencies.readCredentialsFile(), dependencies.now());
+      } catch {
+        return null;
+      }
+    };
+    let credentials = await readCredentials();
     if (!credentials) {
       return fail('no-credentials', null);
     }
     if (credentials.expired) {
-      // Refreshing would mean writing the user's credentials file; Claude Code
-      // renews the token itself on its next request.
-      return fail('token-expired', credentials.plan);
+      // Review: an idle panel never renewed it (Claude Code only does on its next
+      // request), so the limits went stale for hours. Claude Code is asked to.
+      if (await renewOnce()) credentials = await readCredentials();
+      if (!credentials || credentials.expired) return fail('token-expired', credentials?.plan ?? null);
     }
     try {
-      const response = await dependencies.fetchUsage(credentials.accessToken);
+      let response = await dependencies.fetchUsage(credentials.accessToken);
+      if (response.status === 401 && await renewOnce()) {
+        const renewed = await readCredentials();
+        if (renewed && !renewed.expired) {
+          credentials = renewed;
+          response = await dependencies.fetchUsage(credentials.accessToken);
+        }
+      }
       if (!response.ok) {
         if (response.status !== 401) {
           refusals += 1;

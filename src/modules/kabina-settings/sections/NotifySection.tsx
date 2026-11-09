@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { NO_AUTOFILL, Toggle } from '@/modules/kabina';
+import { NO_AUTOFILL, panelZoneLabel, Toggle, usePanelTimeZone } from '@/modules/kabina';
 import { TelegramLinkCardView, useTelegramLink } from '@/modules/kabina-notifications';
 import { useWebPush } from '@/modules/settings';
 import { isSubscriptionLimitsEnabled, useSubscriptionLimits } from '@/shared/hooks/useSubscriptionLimits';
@@ -101,6 +101,8 @@ function ClockField({ label, value, onSave }: { label: string; value: string; on
  * Rendered by KabinaSettingsScreen.
  */
 export default function NotifySection({ settings, update }: NotifySectionProps) {
+  // The quiet hours run on the panel clock; re-rendered when the zone changes in the settings.
+  const panelZone = usePanelTimeZone();
   const push = useWebPush();
   const telegram = useTelegramLink();
   // Result of «Прислать тестовое».
@@ -255,7 +257,7 @@ export default function NotifySection({ settings, update }: NotifySectionProps) 
           <div className="kb-set-row" data-hover="" data-tight="" style={{ flexWrap: 'wrap' }}>
             <div className="kb-set-text" style={{ flex: '1 1 220px' }}>
               <span className="kb-set-name">Тихие часы</span>
-              <span className="kb-set-desc">В это время молчат все, кроме «нужно подтверждение». Время — по Екатеринбургу.</span>
+              <span className="kb-set-desc">В это время молчат все, кроме «нужно подтверждение». Время — по часовому поясу панели ({panelZoneLabel()} · {panelZone}, меняется в «Аккаунте»).</span>
             </div>
             <div className="kb-set-quiet">
               <ClockField label="с" value={quiet.from} onSave={(from) => setQuiet({ from })} />
