@@ -61,7 +61,10 @@ const abortedInstances = new WeakSet();
 // entry, the abort flag, and all client-facing events belong to the new run.
 const supersededInstances = new WeakSet();
 
-const TOOL_APPROVAL_TIMEOUT_MS = parseInt(process.env.CLAUDE_TOOL_APPROVAL_TIMEOUT_MS, 10) || 55000;
+// Review: 55 s (the CloudCLI default) ran out before the Telegram card (sent after 2 min of
+// waiting) could ever go, so approving from the phone never worked. Thirty minutes leaves room
+// to answer from Telegram; CLAUDE_TOOL_APPROVAL_TIMEOUT_MS still overrides it.
+const TOOL_APPROVAL_TIMEOUT_MS = parseInt(process.env.CLAUDE_TOOL_APPROVAL_TIMEOUT_MS, 10) || 30 * 60_000;
 
 const DEFAULT_BG_WAIT_CEILING_MIN = 30;
 // setTimeout overflows (and fires immediately) past 2^31-1 ms, about 24.8 days.

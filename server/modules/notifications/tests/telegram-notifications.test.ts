@@ -681,3 +681,11 @@ test('telegramLinkDb: codes are single-use and expire; the link is one row', asy
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test('the Telegram approval card always goes before the approval times out (review)', async () => {
+  const { approvalDelayFor } = await import('@/modules/notifications/services/telegram-notifications.service.js');
+  assert.equal(approvalDelayFor({}), 120_000, 'default: 2 min inside the 30 min timeout');
+  assert.equal(approvalDelayFor({ CLAUDE_TOOL_APPROVAL_TIMEOUT_MS: '55000' }), 27_500, 'a short timeout halves the wait');
+  assert.equal(approvalDelayFor({ CLAUDE_TOOL_APPROVAL_TIMEOUT_MS: '3000' }), 5_000);
+  assert.equal(approvalDelayFor({ CLAUDE_TOOL_APPROVAL_TIMEOUT_MS: 'junk' }), 120_000);
+});

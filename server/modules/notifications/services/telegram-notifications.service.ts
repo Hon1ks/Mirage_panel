@@ -53,6 +53,17 @@ type TelegramNotificationsDependencies = {
   longPollSec?: number;
 };
 
+/**
+ * Review: how long a permission request waits before the Telegram card goes — two
+ * minutes, but always well inside the runtime's approval timeout
+ * (CLAUDE_TOOL_APPROVAL_TIMEOUT_MS, 30 min by default), or the request would expire
+ * before the phone ever heard of it. Exported for the notification tests.
+ */
+export function approvalDelayFor(env: NodeJS.ProcessEnv): number {
+  const timeoutMs = Number.parseInt(env.CLAUDE_TOOL_APPROVAL_TIMEOUT_MS ?? '', 10) || 30 * 60_000;
+  return Math.max(5_000, Math.min(2 * 60_000, Math.floor(timeoutMs / 2)));
+}
+
 function readEnvText(env: NodeJS.ProcessEnv, key: string): string | null {
   const value = env[key]?.trim();
   return value ? value : null;
@@ -74,7 +85,6 @@ export function createTelegramNotificationsService(dependencies: TelegramNotific
   const unsubscribers: Array<() => void> = [];
   let limitTimer: NodeJS.Timeout | null = null;
   let reminderTimer: NodeJS.Timeout | null = null;
-  const timeZone = getPanelTimeZone(dependencies.env);
   const panelUrl = readEnvText(dependencies.env, 'MIRAGE_PANEL_PUBLIC_URL');
 
   const link = createTelegramLinkService({
@@ -90,7 +100,8 @@ export function createTelegramNotificationsService(dependencies: TelegramNotific
     resolveToolApproval: dependencies.resolveToolApproval,
     describeSession: dependencies.describeSession,
     panelUrl,
-    timeZone,
+    // Review: read on every use, so a zone changed in the settings applies without a restart.
+    get timeZone() { return getPanelTimeZone(dependencies.env); },
     now: dependencies.now,
     schedule: dependencies.schedule,
     readLimitAlerts: () => {
@@ -102,7 +113,7 @@ export function createTelegramNotificationsService(dependencies: TelegramNotific
       }
     },
     writeLimitAlerts: (keys) => dependencies.writeConfig(LIMIT_ALERTS_KEY, JSON.stringify(keys)),
-    approvalDelayMs: dependencies.approvalDelayMs,
+    approvalDelayMs: dependencies.approvalDelayMs ?? approvalDelayFor(dependencies.env),
   });
 
   const calendarReminders = createCalendarReminderNotifier({
@@ -120,7 +131,8 @@ export function createTelegramNotificationsService(dependencies: TelegramNotific
     },
     writeSent: (keys) => dependencies.writeConfig(CALENDAR_REMINDERS_KEY, JSON.stringify(keys)),
     panelUrl,
-    timeZone,
+    // Review: read on every use, so a zone changed in the settings applies without a restart.
+    get timeZone() { return getPanelTimeZone(dependencies.env); },
     zoneLabel: getPanelTimeZoneLabel(dependencies.env),
     now: dependencies.now,
   });
