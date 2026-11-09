@@ -602,7 +602,7 @@ test('calendar reminders: sent once when due, in the panel zone, with a link to 
   assert.equal(await harness.service.checkCalendarReminders(), 1);
   const [message] = harness.sent();
   assert.equal(message.body.chat_id, String(OWNER_CHAT.id));
-  assert.equal(message.body.text, '⏰ Через 15 мин · 15:15 ЕКБ\nЗвонок: Иван — про сайт\nИван · +7 900 000-00-00\nпроект DemoVilla');
+  assert.equal(message.body.text, '⏰ Через 15 мин · 15:15 ЕКБ\nЗвонок: Иван — про сайт\nИван\nпроект DemoVilla');
   assert.equal(message.body.reply_markup.inline_keyboard[0][0].url, 'https://panel.example/calendar?event=ev-call&date=2026-10-26');
   assert.equal(harness.state.reminderQueries[0].timeZone, 'Asia/Yekaterinburg');
 

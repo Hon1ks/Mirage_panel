@@ -8,13 +8,9 @@
     <title>Mirage</title>
     <meta name="description" content="Mirage Cloud Panel — self-hosted web panel for Claude Code" />
 
-    <!-- Fonts: «Кабина» — Golos Text (текст), Tektur (заголовки, цифры), Martian Mono (служебное); с кириллицей -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Tektur:wght@400..700&family=Martian+Mono:wdth,wght@75..112.5,300..600&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Fonts: «Кабина» — Golos Text (текст), Tektur (заголовки, цифры), Martian Mono (служебное); с кириллицей.
+         Served by the panel itself (public/fonts), not by fonts.googleapis.com (review fix Н-4). -->
+    <link href="/fonts/fonts.css" rel="stylesheet" />
 
     <!-- PWA Manifest -->
     <link rel="manifest" href="/manifest.json" crossorigin="use-credentials"  />

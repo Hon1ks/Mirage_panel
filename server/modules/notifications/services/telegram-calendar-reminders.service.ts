@@ -80,7 +80,8 @@ export function formatCalendarReminder(item: CalendarItem, nowMs: number, timeZo
   const lines = [
     `⏰ ${leadText(startMs - nowMs)} · ${today ? '' : `${when.date} `}${when.clock} ${zoneLabel ?? utcOffsetLabel(startMs, timeZone)}`,
     `${TYPE_LABELS[item.type] ?? 'Событие'}: ${item.title}`,
-    contact ? [contact.name, contact.phone, contact.telegram].filter(Boolean).join(' · ') : null,
+    // Review fix (Н-11): the phone number stays in the panel; the bot gets the name and the @handle.
+    contact ? [contact.name, contact.telegram].filter(Boolean).join(' · ') : null,
     item.location,
     item.projectName ? `проект ${item.projectName}` : null,
   ];

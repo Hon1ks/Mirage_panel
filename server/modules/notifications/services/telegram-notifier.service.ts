@@ -114,6 +114,32 @@ function minutesText(ms: number): string {
 }
 
 /** One line on what the tool wants to do: the command, the file, or compact JSON. */
+/**
+ * Review fix (Н-11): what goes to Telegram is stored on Telegram's servers, so a
+ * command waiting for approval is sent with its secrets masked — the shape of the
+ * command stays readable to decide on. Covers credentials in URLs, Authorization /
+ * Bearer headers, `name=value` / `--name value` / `export NAME=value` for secret-like
+ * names, and well-known token formats. Exported for the notification tests.
+ */
+export function maskSecrets(text: string): string {
+  const MASK = '•••';
+  const SECRET_NAME = '[A-Za-z0-9_.-]*(?:pass(?:word|wd)?|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|credential|cookie|session[_-]?(?:id|key|token))[A-Za-z0-9_.-]*';
+  return text
+    // scheme://user:password@host
+    .replace(/(\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:)[^\s@/]+@/gi, `$1${MASK}@`)
+    // Authorization: Bearer xxx / Basic xxx, and bare «Bearer xxx»
+    .replace(/(authorization\s*[:=]\s*["']?\s*(?:bearer|basic|token)?\s*)[^\s"']+/gi, `$1${MASK}`)
+    .replace(/(\bbearer\s+)[A-Za-z0-9._~+/=-]{8,}/gi, `$1${MASK}`)
+    // NAME=value, NAME: value, --name value / --name=value for secret-like names
+    .replace(new RegExp(`(\\b${SECRET_NAME}\\s*[=:]\\s*["']?)[^\\s"'&;]+`, 'gi'), `$1${MASK}`)
+    .replace(new RegExp(`(--${SECRET_NAME}[ =]["']?)[^\\s"']+`, 'gi'), `$1${MASK}`)
+    // Known token formats
+    .replace(/\b(?:sk-ant-|sk-|ghp_|gho_|ghs_|github_pat_|glpat-|xox[abprs]-|AKIA|ASIA|AIza|ya29\.)[A-Za-z0-9_\-.]{8,}/g, MASK)
+    .replace(/\b\d{8,10}:[A-Za-z0-9_-]{30,}\b/g, MASK)
+    .replace(/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, MASK)
+    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g, MASK);
+}
+
 function summarizeToolInput(toolName: string, input: unknown): string {
   const record = input && typeof input === 'object' ? (input as Record<string, unknown>) : null;
   const pick = ['command', 'file_path', 'path', 'url', 'pattern', 'description']
@@ -127,7 +153,7 @@ function summarizeToolInput(toolName: string, input: unknown): string {
       summary = '';
     }
   }
-  summary = summary.replace(/\s+/g, ' ').trim();
+  summary = maskSecrets(summary).replace(/\s+/g, ' ').trim();
   if (summary.length > INPUT_SUMMARY_LENGTH) summary = `${summary.slice(0, INPUT_SUMMARY_LENGTH - 1)}…`;
   return summary ? `${toolName}: ${summary}` : toolName;
 }
