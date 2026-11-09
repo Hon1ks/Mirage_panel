@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import '@/modules/kabina-settings/kabinaSettings.css';
-import { lockPageScroll, Skeleton, toPanelWall, usePanelTimeZone } from '@/modules/kabina';
+import { lockPageScroll, setPanelTimeZone, Skeleton, toPanelWall, usePanelTimeZone } from '@/modules/kabina';
 import { usePlugins } from '@/modules/plugins';
 import { APP_VERSION } from '@/shared/constants';
 import { voiceHotkeyLabel } from '@/shared/utils';
@@ -188,6 +188,13 @@ export default function KabinaSettingsScreen({ section, renderClassic }: KabinaS
         refresh={account.refresh}
         displayName={settings ? settings.profile?.displayName ?? '' : null}
         onDisplayNameChange={(displayName) => update({ profile: { displayName } })}
+        timeZone={settings ? settings.profile?.timeZone ?? '' : null}
+        serverTimeZone={view?.server?.timeZone ?? null}
+        onTimeZoneChange={(timeZone) => {
+          update({ profile: { timeZone } });
+          // Every clock of this tab follows at once; other tabs pick it up on reload.
+          setPanelTimeZone(timeZone || view?.server?.timeZone || null);
+        }}
       />
     );
   } else if (current === 'plugins') {

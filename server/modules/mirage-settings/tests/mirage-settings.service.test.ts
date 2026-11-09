@@ -63,7 +63,7 @@ test('defaults come from the mock-up and settings.json is read for the two Claud
     assert.equal(view.claudeSettings.readable, true);
     assert.equal(view.savedAt, null);
     // The client learns `~` and the root flag from here instead of guessing from paths.
-    assert.deepEqual(view.server, { homeDir: '/home/panel', isRoot: false });
+    assert.deepEqual(view.server, { homeDir: '/home/panel', isRoot: false, timeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' });
   });
 });
 
@@ -199,5 +199,24 @@ test('keys inherited from Object.prototype are refused, not stored or run as rul
     assert.equal(Object.hasOwn(view.settings, 'constructor'), false);
     assert.equal(Object.hasOwn(view.settings.profile, 'toString'), false);
     assert.equal(view.settings.profile.displayName, 'Иван');
+  });
+});
+
+test('the panel time zone is checked, applied at once and falls back to the server zone when cleared (review)', async () => {
+  await withSettings(null, async ({ env, service }) => {
+    const before = await service.getSettings();
+    assert.equal(before.settings.profile.timeZone, '');
+    assert.ok(before.server.timeZone);
+
+    await service.updateSettings({ profile: { timeZone: 'Europe/Moscow' } });
+    assert.equal(env.MIRAGE_TIMEZONE, 'Europe/Moscow');
+    assert.equal((await service.getSettings()).settings.profile.timeZone, 'Europe/Moscow');
+
+    await assert.rejects(service.updateSettings({ profile: { timeZone: 'Mars/Olympus' } }), AppError);
+    await assert.rejects(service.updateSettings({ profile: { timeZone: 'Europe/Moscow; rm -rf /' } }), AppError);
+    assert.equal(env.MIRAGE_TIMEZONE, 'Europe/Moscow');
+
+    await service.updateSettings({ profile: { timeZone: '' } });
+    assert.equal(env.MIRAGE_TIMEZONE, undefined, 'back to the zone the server started with');
   });
 });

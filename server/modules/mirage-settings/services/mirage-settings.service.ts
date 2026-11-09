@@ -20,6 +20,8 @@ import { createClaudeSettingsFile, resolveClaudeSettingsPath } from './claude-se
 const STORAGE_KEY = 'mirage_settings';
 const SAVED_AT_KEY = 'mirage_settings_saved_at';
 const IDLE_TIMEOUT_ENV = 'CLAUDE_SESSION_IDLE_TIMEOUT_MIN';
+// Review: read by getPanelTimeZone on every call, so a change applies at once.
+const TIMEZONE_ENV = 'MIRAGE_TIMEZONE';
 
 const WIDGET_IDS = ['fav', 'work', 'cal', 'lim', 'leads', 'server', 'deploy'] as const;
 type WidgetId = (typeof WIDGET_IDS)[number];
@@ -37,7 +39,7 @@ type MirageSettingsDependencies = {
   readSavedAt(): string | null;
   claudeSettings: ReturnType<typeof createClaudeSettingsFile>;
   /** The server process's home folder and root flag (`MirageSettingsView.server`). */
-  readServerRuntime(): MirageSettingsView['server'];
+  readServerRuntime(): Omit<MirageSettingsView['server'], 'timeZone'>;
   env: NodeJS.ProcessEnv;
   now(): number;
 };
@@ -72,7 +74,7 @@ function buildDefaults(env: NodeJS.ProcessEnv): DatabaseSettings {
     },
     home: { widgets: WIDGET_IDS.map((id) => ({ id, enabled: DEFAULT_WIDGETS_ON.includes(id) })) },
     appearance: { theme: 'cabin', density: 'normal' },
-    profile: { displayName: '' },
+    profile: { displayName: '', timeZone: '' },
   };
 }
 
@@ -112,6 +114,16 @@ const displayName: LeafRule = (value, field) => {
   const name = value.replace(/\s+/g, ' ').trim();
   if (name.length > 40 || /[<>{}]/.test(name)) throw invalid(field, 'имя до 40 символов без < > { }');
   return name;
+};
+// Review: the panel zone chosen in the settings; '' falls back to MIRAGE_TIMEZONE / the server's zone.
+const timeZone: LeafRule = (value, field) => {
+  if (value === '') return '';
+  if (typeof value !== 'string' || value.length > 64) throw invalid(field, 'часовой пояс IANA (Europe/Moscow) или пусто');
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone: value }).resolvedOptions().timeZone;
+  } catch {
+    throw invalid(field, 'часовой пояс IANA (Europe/Moscow) или пусто');
+  }
 };
 const widgets: LeafRule = (value, field) => {
   if (!Array.isArray(value)) throw invalid(field, 'список виджетов');
@@ -163,7 +175,7 @@ const PATCH_SCHEMA: Schema = {
   },
   home: { widgets },
   appearance: { theme: oneOf('cabin', 'light'), density: oneOf('normal', 'compact') },
-  profile: { displayName },
+  profile: { displayName, timeZone },
 };
 
 /** Validates `patch` against the schema and returns the cleaned copy. */
@@ -244,11 +256,28 @@ export function createMirageSettingsService(dependencies: MirageSettingsDependen
       },
       claudeSettings: { path: snapshot.path, exists: snapshot.exists, readable: snapshot.readable, error: snapshot.error },
       savedAt: dependencies.readSavedAt(),
-      server: dependencies.readServerRuntime(),
+      server: { ...dependencies.readServerRuntime(), timeZone: fallbackTimeZone() },
     };
   };
 
   /** Pushes runtime-relevant settings into the live process. */
+  // The zone the server was started with (env or system), what an empty choice falls back to.
+  const startupTimeZone = dependencies.env[TIMEZONE_ENV];
+  const applyTimeZone = (zone: unknown): void => {
+    if (typeof zone === 'string' && zone) dependencies.env[TIMEZONE_ENV] = zone;
+    else if (startupTimeZone === undefined) delete dependencies.env[TIMEZONE_ENV];
+    else dependencies.env[TIMEZONE_ENV] = startupTimeZone;
+  };
+  const fallbackTimeZone = (): string => {
+    const configured = startupTimeZone?.trim();
+    try {
+      if (configured) return new Intl.DateTimeFormat('en-US', { timeZone: configured }).resolvedOptions().timeZone;
+    } catch {
+      // An unknown MIRAGE_TIMEZONE falls through to the system zone, as getPanelTimeZone does.
+    }
+    return new Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  };
+
   const applyRuntime = (settings: DatabaseSettings): void => {
     dependencies.env[IDLE_TIMEOUT_ENV] = String(settings.claude.silenceCeilingMin);
   };
@@ -293,6 +322,9 @@ export function createMirageSettingsService(dependencies: MirageSettingsDependen
         if (isPlainObject(databasePatch.claude) && 'silenceCeilingMin' in databasePatch.claude) {
           applyRuntime(next);
         }
+        if (isPlainObject(databasePatch.profile) && 'timeZone' in databasePatch.profile) {
+          applyTimeZone(next.profile.timeZone);
+        }
       }
       return buildView();
     },
@@ -310,6 +342,8 @@ export function createMirageSettingsService(dependencies: MirageSettingsDependen
         if (typeof claude.silenceCeilingMin === 'number') {
           dependencies.env[IDLE_TIMEOUT_ENV] = String(claude.silenceCeilingMin);
         }
+        const profile = isPlainObject(stored.profile) ? stored.profile : {};
+        if (typeof profile.timeZone === 'string' && profile.timeZone) applyTimeZone(profile.timeZone);
       } catch {
         // A corrupt row keeps the environment's value.
       }

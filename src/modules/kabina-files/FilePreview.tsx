@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { Button, NO_AUTOFILL } from '@/modules/kabina';
+import { CodeEditor } from '@/modules/code-editor';
 import {
   ArchiveGlyph,
   ArrowGlyph,
@@ -422,6 +423,9 @@ export default function FilePreview(props: FilePreviewProps) {
   ] : [];
 
   const askDisabled = !entry || !props.readProjectId;
+  // Review: the preview shows the start of a text file; this opens it whole in the editor.
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const canOpenWhole = Boolean(entry && props.readProjectId && !isDirectory && (kind === 'md' || kind === 'code'));
   const sendQuestion = () => {
     if (askDisabled) return;
     props.onOpenInChat(question.trim());
@@ -487,7 +491,12 @@ export default function FilePreview(props: FilePreviewProps) {
       </div>
 
       <div className="kf-actions">
-        <Button variant="pri" disabled={askDisabled} onClick={() => props.onOpenInChat('')}>
+        {canOpenWhole && (
+          <Button variant="pri" onClick={() => setIsEditorOpen(true)}>
+            Открыть целиком
+          </Button>
+        )}
+        <Button variant={canOpenWhole ? 'ghost' : 'pri'} disabled={askDisabled} onClick={() => props.onOpenInChat('')}>
           <ChatGlyph />Открыть в чате
         </Button>
         <Button variant="ghost" disabled={!entry || isDirectory || !props.readProjectId} onClick={() => void download()}>
@@ -548,6 +557,12 @@ export default function FilePreview(props: FilePreviewProps) {
           <ArchiveGlyph size={14} />В архив
         </button>
       </div>
+      {isEditorOpen && entry && props.readProjectId && (
+        <CodeEditor
+          file={{ name: entry.name, path: entry.path, projectId: props.readProjectId }}
+          onClose={() => setIsEditorOpen(false)}
+        />
+      )}
     </>
   );
 }

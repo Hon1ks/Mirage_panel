@@ -2900,7 +2900,8 @@ export type MirageSettings = {
     density: 'normal' | 'compact';
   };
   /** «Как тебя называть» (Аккаунт): the home greeting's name; '' — from the login when it is a Russian name. */
-  profile: { displayName: string };
+  /** `timeZone`: IANA zone for every panel clock, calendar and Telegram time; '' — the server's own (review). */
+  profile: { displayName: string; timeZone: string };
 };
 
 /** `GET/PATCH /api/mirage-settings` response. */
@@ -2914,7 +2915,7 @@ export type MirageSettingsView = {
    * The server process: its user's home folder (what `~` means in paths the panel
    * shows) and whether it runs as root (Claude Code refuses Bypass permissions then).
    */
-  server: { homeDir: string; isRoot: boolean };
+  server: { homeDir: string; isRoot: boolean; /** The zone used when `profile.timeZone` is empty (MIRAGE_TIMEZONE or the server's). */ timeZone: string };
 };
 
 // ---------------------------

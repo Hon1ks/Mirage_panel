@@ -18,6 +18,11 @@ type AccountSectionProps = {
   /** «Как тебя называть» from the panel settings; null while they load. */
   displayName: string | null;
   onDisplayNameChange: (name: string) => void;
+  /** Review: the panel zone from the settings ('' — the server's); null while loading. */
+  timeZone: string | null;
+  /** The zone an empty choice means (MIRAGE_TIMEZONE or the server's own). */
+  serverTimeZone: string | null;
+  onTimeZoneChange: (zone: string) => void;
 };
 
 const MIN_PASSWORD = 12;
@@ -64,7 +69,47 @@ function DeviceIcon({ kind }: { kind: SessionDeviceKind }) {
  * device's token and ends the others), the TOTP second factor with backup codes,
  * live sign-ins and remembered devices. Rendered by KabinaSettingsScreen.
  */
-export default function AccountSection({ twoFactor, sessions, devices, refresh, displayName, onDisplayNameChange }: AccountSectionProps) {
+/** Zones offered in the picker (Russia first, then nearby); any other saved zone is added to the list. */
+const TIME_ZONES: Array<{ zone: string; city: string }> = [
+  { zone: 'Europe/Kaliningrad', city: 'Калининград' },
+  { zone: 'Europe/Moscow', city: 'Москва, Санкт-Петербург' },
+  { zone: 'Europe/Samara', city: 'Самара' },
+  { zone: 'Asia/Yekaterinburg', city: 'Екатеринбург' },
+  { zone: 'Asia/Omsk', city: 'Омск' },
+  { zone: 'Asia/Novosibirsk', city: 'Новосибирск' },
+  { zone: 'Asia/Krasnoyarsk', city: 'Красноярск' },
+  { zone: 'Asia/Irkutsk', city: 'Иркутск' },
+  { zone: 'Asia/Yakutsk', city: 'Якутск' },
+  { zone: 'Asia/Vladivostok', city: 'Владивосток' },
+  { zone: 'Asia/Magadan', city: 'Магадан' },
+  { zone: 'Asia/Kamchatka', city: 'Камчатка' },
+  { zone: 'UTC', city: 'UTC' },
+  { zone: 'Europe/London', city: 'Лондон' },
+  { zone: 'Europe/Berlin', city: 'Берлин' },
+  { zone: 'Europe/Kyiv', city: 'Киев' },
+  { zone: 'Europe/Minsk', city: 'Минск' },
+  { zone: 'Asia/Tbilisi', city: 'Тбилиси' },
+  { zone: 'Asia/Yerevan', city: 'Ереван' },
+  { zone: 'Asia/Dubai', city: 'Дубай' },
+  { zone: 'Asia/Almaty', city: 'Алматы' },
+  { zone: 'Asia/Tashkent', city: 'Ташкент' },
+  { zone: 'Asia/Bangkok', city: 'Бангкок' },
+];
+
+/** «UTC+3», «UTC+5:30», «UTC» for a zone now (daylight saving included). */
+function utcOffsetLabel(zone: string): string {
+  try {
+    const part = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'shortOffset' })
+      .formatToParts(new Date())
+      .find((entry) => entry.type === 'timeZoneName')?.value ?? '';
+    const offset = part.replace(/^GMT/, '');
+    return offset ? `UTC${offset}` : 'UTC';
+  } catch {
+    return zone;
+  }
+}
+
+export default function AccountSection({ twoFactor, sessions, devices, refresh, displayName, onDisplayNameChange, timeZone, serverTimeZone, onTimeZoneChange }: AccountSectionProps) {
   usePanelTimeZone();
   const { adoptToken, logout, user } = useAuth();
   // The name field is edited locally and saved on blur / Enter, not on every keystroke.
@@ -182,7 +227,7 @@ export default function AccountSection({ twoFactor, sessions, devices, refresh, 
 
   return (
     <div className="kb-set-group">
-      <SettingsBlock id="h-name" index="05.1" title="КАК ТЕБЯ НАЗЫВАТЬ" major delay={1}>
+      <SettingsBlock id="h-name" index="05.1" title="ИМЯ И ЧАСОВОЙ ПОЯС" major delay={1}>
         <div className="kb-bz kb-set-plate" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '10px 16px', padding: 18 }}>
           <label className="kb-m kb-set-fieldlabel" style={{ flex: '0 1 320px' }}>
             ИМЯ В ПРИВЕТСТВИИ
@@ -206,6 +251,27 @@ export default function AccountSection({ twoFactor, sessions, devices, refresh, 
           </label>
           <span style={{ flex: '1 1 260px', fontSize: 13, lineHeight: 1.5, color: '#948C7E', textWrap: 'pretty', paddingBottom: 12 }}>
             {`Главный экран скажет «Добрый день, ${nameValue.trim() || 'Имя'}». Пусто — имя из логина${user?.username ? ` «${user.username}»` : ''}, если оно русское, иначе без имени.`}
+          </span>
+        </div>
+        <div className="kb-bz kb-set-plate" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: '10px 16px', padding: 18, marginTop: 10 }}>
+          <label className="kb-m kb-set-fieldlabel" style={{ flex: '0 1 320px' }}>
+            ЧАСОВОЙ ПОЯС
+            <select
+              className="kb-set-field"
+              value={timeZone ?? ''}
+              disabled={timeZone === null}
+              onChange={(event) => onTimeZoneChange(event.target.value)}
+            >
+              <option value="">{`Как на сервере${serverTimeZone ? ` · ${serverTimeZone} · ${utcOffsetLabel(serverTimeZone)}` : ''}`}</option>
+              {[...TIME_ZONES, ...(timeZone && !TIME_ZONES.some((entry) => entry.zone === timeZone) ? [{ zone: timeZone, city: timeZone }] : [])].map((entry) => (
+                <option key={entry.zone} value={entry.zone}>{`${utcOffsetLabel(entry.zone)} · ${entry.city}`}</option>
+              ))}
+            </select>
+          </label>
+          <span style={{ flex: '1 1 260px', fontSize: 13, lineHeight: 1.5, color: '#948C7E', textWrap: 'pretty', paddingBottom: 12 }}>
+            Время всех часов панели, календаря и уведомлений в Telegram. Отложенные сообщения уйдут в тот же момент,
+            что и были назначены; повторяющиеся события («каждый день в 9») — в 9 по выбранному поясу. Таймеры сервера
+            (systemd) работают по часам сервера, панель только показывает их в этом поясе.
           </span>
         </div>
       </SettingsBlock>
