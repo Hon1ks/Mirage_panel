@@ -211,7 +211,7 @@ export default function KabinaSettingsScreen({ section, renderClassic }: KabinaS
       </div>
     );
   } else if (current === 'claude') {
-    content = <ClaudeSection settings={settings.claude} update={update} runsAsRoot={runsAsRoot} />;
+    content = <ClaudeSection settings={settings.claude} update={update} runsAsRoot={runsAsRoot} showThoughts={settings.appearance.showThoughts ?? true} />;
   } else if (current === 'voice') {
     content = <VoiceSection settings={settings.voice} update={update} />;
   } else if (current === 'home') {

@@ -9,6 +9,8 @@ type ClaudeSectionProps = {
   update: (patch: MirageSettingsPatch) => void;
   /** The panel runs as root (the server reports uid 0): Bypass is refused by Claude Code. */
   runsAsRoot: boolean;
+  /** «Мысли Claude» (01.5); stored under `appearance.showThoughts`, as it only changes the chat feed. */
+  showThoughts: boolean;
 };
 
 const MODES: Array<{ value: MirageSettings['claude']['permissionMode']; label: string; tag: string; desc: string }> = [
@@ -35,7 +37,7 @@ function modelFamily(model: string): 'opus' | 'sonnet' | 'haiku' | null {
  * model and effort, artifacts and workflows (settings.json), the silence ceiling
  * of background work and what a message sent mid-turn does. Rendered by KabinaSettingsScreen.
  */
-export default function ClaudeSection({ settings, update, runsAsRoot }: ClaudeSectionProps) {
+export default function ClaudeSection({ settings, update, runsAsRoot, showThoughts }: ClaudeSectionProps) {
   // The «Как включить» explanation under the Bypass note.
   const [bypassOpen, setBypassOpen] = useState(false);
   const patch = (next: Partial<MirageSettings['claude']>) => update({ claude: next });
@@ -249,6 +251,17 @@ export default function ClaudeSection({ settings, update, runsAsRoot }: ClaudeSe
               ]}
             />
           </div>
+        </div>
+      </SettingsBlock>
+
+      <SettingsBlock id="h-thk" index="01.5" title="МЫСЛИ CLAUDE" delay={5}>
+        <div className="kb-set-plate" data-clip="">
+          <SwitchRow
+            title="Показывать мысли в чате"
+            desc="Между шагами журнала — свёрнутая строка «мысль»; нажми, чтобы прочитать. Выключено — в ленте только шаги и ответы."
+            checked={showThoughts}
+            onChange={(next) => update({ appearance: { showThoughts: next } })}
+          />
         </div>
       </SettingsBlock>
     </div>

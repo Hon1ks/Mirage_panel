@@ -10,7 +10,7 @@ type SettingsBlockProps = {
   /** The first block of a section carries the long ticks, the rest only the fine ones (as in the mock-up). */
   major?: boolean;
   /** Animation stagger: 1–4. */
-  delay?: 1 | 2 | 3 | 4;
+  delay?: 1 | 2 | 3 | 4 | 5;
   aside?: ReactNode;
   children: ReactNode;
   className?: string;
