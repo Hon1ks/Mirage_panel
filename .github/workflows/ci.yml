@@ -1,8 +1,9 @@
 name: CI
 
+# Manual only: run it from the Actions tab («Run workflow»). Changes are built and tested on the
+# server before they are pushed, so a run on every push only spent Actions minutes.
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
