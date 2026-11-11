@@ -522,12 +522,16 @@ export default function KabinaChatScreen(props: KabinaChatScreenProps) {
   const title = session ? sessionTitle(session) : 'Новый диалог';
 
   const modelOption = provider.currentProviderModelOptions.find((option) => option.value === provider.currentProviderModel);
-  // The model that answered last (from the transcript or the SDK) — else the composer's choice.
-  const modelName = usage?.model
-    ? shortModelName(undefined, usage.model)
-    : shortModelName(modelOption?.label, provider.currentProviderModel || '—', modelOption?.description);
+  // The composer's choice — what the next turn runs with. Showing the model that answered
+  // last instead made a new pick look ignored until the next reply; that one goes in the meta.
+  const modelName = shortModelName(modelOption?.label, provider.currentProviderModel || '—', modelOption?.description);
+  const answeredBy = usage?.model ? shortModelName(undefined, usage.model) : null;
   const effort = provider.currentProviderEffort && provider.currentProviderEffort !== 'default' ? provider.currentProviderEffort : 'авто';
-  const modelMeta = [usage?.maxTokens ? formatTokens(usage.maxTokens) : null, effort].filter(Boolean).join(' · ');
+  const modelMeta = [
+    usage?.maxTokens ? formatTokens(usage.maxTokens) : null,
+    effort,
+    answeredBy && answeredBy !== modelName ? `ответил ${answeredBy}` : null,
+  ].filter(Boolean).join(' · ');
   const percent = usage ? Math.round(usage.percentage) : null;
 
   const decision = <DecisionCards requests={pendingRequests} onDecision={composer.handlePermissionDecision} isPhone={isPhone} />;
