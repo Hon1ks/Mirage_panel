@@ -34,7 +34,7 @@ const SETTINGS = {
     quietHours: { enabled: true, from: '23:00', to: '08:00' },
   },
   home: { widgets: [{ id: 'fav', enabled: true }, { id: 'work', enabled: true }, { id: 'cal', enabled: false }] },
-  appearance: { theme: 'cabin', density: 'normal' },
+  appearance: { theme: 'cabin', density: 'normal', showThoughts: true },
 };
 
 const VIEW = { settings: SETTINGS, claudeSettings: { path: '/root/.claude/settings.json', exists: true, readable: true, error: null }, savedAt: '2026-10-26T09:18:00.000Z', server: { homeDir: '/root', isRoot: true } };

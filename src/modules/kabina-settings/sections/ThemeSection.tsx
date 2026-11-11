@@ -1,6 +1,6 @@
 import { Segmented } from '@/modules/kabina';
 import type { MirageSettings, MirageSettingsPatch } from '@/shared/types';
-import { SettingsBlock, SettingsTag } from '@/modules/kabina-settings/SettingsParts';
+import { SettingsBlock, SettingsTag, SwitchRow } from '@/modules/kabina-settings/SettingsParts';
 
 type ThemeSectionProps = {
   settings: MirageSettings['appearance'];
@@ -20,7 +20,8 @@ const SAMPLE = [
 
 /**
  * DarkSettings 07 «Тема»: «Кабина» or the light theme (marked «скоро» — the choice
- * is kept and applies once it exists) and the interface density with a sample.
+ * is kept and applies once it exists), the interface density with a sample and
+ * whether Claude's thinking shows in the chat feed.
  * Rendered by KabinaSettingsScreen.
  */
 export default function ThemeSection({ settings, update }: ThemeSectionProps) {
@@ -106,6 +107,17 @@ export default function ThemeSection({ settings, update }: ThemeSectionProps) {
               </div>
             ))}
           </div>
+        </div>
+      </SettingsBlock>
+
+      <SettingsBlock id="h-thk" index="07.3" title="МЫСЛИ CLAUDE" delay={3}>
+        <div className="kb-set-plate" data-clip="">
+          <SwitchRow
+            title="Показывать мысли в чате"
+            desc="Между шагами журнала — свёрнутая строка «мысль»; нажми, чтобы прочитать. Выключено — в ленте только шаги и ответы."
+            checked={settings.showThoughts}
+            onChange={(showThoughts) => update({ appearance: { showThoughts } })}
+          />
         </div>
       </SettingsBlock>
     </div>

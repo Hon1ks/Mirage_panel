@@ -166,7 +166,7 @@ function FeedPlaceholder({ isLoading, hasMore, loadError, onRetry, emptyHint }: 
 }
 
 /** Rows that belong to Claude's turn: the next work row hangs under them without its own header. */
-const CLAUDE_ROWS = new Set<FeedItem['kind'] | undefined>(['assistant', 'journal', 'agent', 'todos']);
+const CLAUDE_ROWS = new Set<FeedItem['kind'] | undefined>(['assistant', 'journal', 'agent', 'todos', 'thought']);
 
 type FeedRowProps = {
   item: FeedItem;
@@ -252,6 +252,19 @@ const FeedRow = memo(function FeedRow({ item, isPhone, attached, isArtifactOpen,
           </div>
           <StreamingMarkdown content={item.text} isStreaming={item.isStreaming} className="kbc-md" />
         </article>
+      );
+    case 'thought':
+      return (
+        <div className="kbc-claude" style={attached ? { marginTop: -12 } : undefined}>
+          {!attached && (
+            <div className="kbc-who kbc-claude-who kb-m">
+              <ClaudeMark />
+              <span className="kbc-who-claude">CLAUDE</span>
+              <span>{item.time}</span>
+            </div>
+          )}
+          <Thought text={item.text} />
+        </div>
       );
     case 'journal':
       return (
@@ -412,6 +425,21 @@ type JournalProps = {
 };
 
 /** «ЖУРНАЛ» — one mono line for a run of tool calls; opens into numbered steps, each opens its input and result. */
+/** A «мысль» line: Claude's thinking folded to its first words; a tap unfolds the whole text. */
+function Thought({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="kbc-thought">
+      <button type="button" className="kbc-thought-row" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        <ChevronRight size={12} className="kbc-chev" />
+        <span className="kbc-thought-cap kb-m">💭 МЫСЛЬ</span>
+        {!open && <span className="kbc-thought-sum">{text.replace(/\s+/g, ' ')}</span>}
+      </button>
+      {open && <p className="kbc-thought-text kb-fadein">{text}</p>}
+    </div>
+  );
+}
+
 function Journal({ steps, summary, total, totalTone, isPhone }: JournalProps) {
   const fileLinks = useContext(FileLinkContext);
   // Whether the step list is shown; journals start folded, as in DarkChat.

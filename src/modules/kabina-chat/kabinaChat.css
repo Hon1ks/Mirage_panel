@@ -1561,6 +1561,70 @@ div.kbc-step-row {
   margin-top: 4px;
 }
 
+/* Мысль Claude между шагами (настройка «Мысли Claude»): тонкая свёрнутая строка */
+
+.kbc-thought {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.kbc-thought-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  max-width: 100%;
+  padding: 0 10px;
+  background: none;
+  border: 1px dashed var(--kb-line);
+  border-radius: 5px;
+  color: var(--kb-mute);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.kbc-thought-row:hover {
+  border-color: var(--kb-soft);
+  color: var(--kb-soft);
+}
+
+.kbc-thought-row[aria-expanded='true'] .kbc-chev {
+  transform: rotate(90deg);
+}
+
+.kbc-thought-cap {
+  flex: none;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+}
+
+.kbc-thought-sum {
+  min-width: 0;
+  font-size: 12px;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kbc-thought-text {
+  margin: 0;
+  padding: 2px 0 2px 12px;
+  border-left: 2px solid var(--kb-line);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.55;
+  color: var(--kb-soft);
+  white-space: pre-wrap;
+}
+
+.kbc-phone .kbc-thought-row {
+  min-height: 40px;
+}
+
 /* Ответ остановлен фильтром Anthropic (Mirage review) */
 
 .kbc-safeguard {

@@ -2898,6 +2898,8 @@ export type MirageSettings = {
   appearance: {
     theme: 'cabin' | 'light';
     density: 'normal' | 'compact';
+    /** Claude's thinking between steps as folded «мысль» lines in the Kabina chat feed. */
+    showThoughts: boolean;
   };
   /** «Как тебя называть» (Аккаунт): the home greeting's name; '' — from the login when it is a Russian name. */
   /** `timeZone`: IANA zone for every panel clock, calendar and Telegram time; '' — the server's own (review). */

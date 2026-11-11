@@ -2787,7 +2787,7 @@ export type MirageSettings = {
     quietHours: { enabled: boolean; from: string; to: string };
   };
   home: { widgets: Array<{ id: MirageWidgetId; enabled: boolean }> };
-  appearance: { theme: 'cabin' | 'light'; density: 'normal' | 'compact' };
+  appearance: { theme: 'cabin' | 'light'; density: 'normal' | 'compact'; showThoughts: boolean };
   /** «Как тебя называть» (Аккаунт): the home greeting's name; '' — from the login when it is a Russian name. */
   /** `timeZone`: IANA zone for every panel clock, calendar and Telegram time; '' — the server's own (review). */
   profile: { displayName: string; timeZone: string };

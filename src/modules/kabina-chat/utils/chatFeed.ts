@@ -37,6 +37,8 @@ export type FeedItem =
   /** The turn's plan: where the turn first touched it, holding its latest state. */
   | { kind: 'todos'; key: string; items: TodoItem[]; updates: number; time: string }
   | { kind: 'assistant'; key: string; message: ChatMessage; text: string; time: string; isStreaming: boolean }
+  /** Claude's thinking between steps, folded to one line (settings «Мысли Claude»); adjacent ones are joined. */
+  | { kind: 'thought'; key: string; text: string; time: string }
   | { kind: 'journal'; key: string; steps: FeedStep[]; summary: string; total: string; totalTone: StepTone; time: string }
   | { kind: 'artifact'; key: string; artifact: FeedArtifact; time: string }
   | { kind: 'stopped'; key: string; time: string; at: Date | null; stop: TurnStopSummary }
@@ -350,7 +352,9 @@ function messageKey(message: ChatMessage, index: number): string {
  */
 export type ChatFeed = { items: FeedItem[]; lastTurnSteps: number; turnTodos: TodoItem[] | null };
 
-export function buildChatFeed(messages: ChatMessage[], now: number = Date.now()): ChatFeed {
+export type ChatFeedOptions = { showThoughts?: boolean };
+
+export function buildChatFeed(messages: ChatMessage[], now: number = Date.now(), options: ChatFeedOptions = {}): ChatFeed {
   const items: FeedItem[] = [];
   let run: FeedStep[] = [];
   let stepInTurn = 0;
@@ -378,7 +382,15 @@ export function buildChatFeed(messages: ChatMessage[], now: number = Date.now())
 
   messages.forEach((message, index) => {
     const key = messageKey(message, index);
-    if (message.isThinking) return;
+    if (message.isThinking) {
+      const text = String(message.content ?? '').trim();
+      if (!options.showThoughts || !text) return;
+      flush();
+      const previous = items[items.length - 1];
+      if (previous?.kind === 'thought') previous.text = `${previous.text}\n\n${text}`;
+      else items.push({ kind: 'thought', key: `thought-${key}`, text, time: formatClock(message.timestamp) });
+      return;
+    }
 
     if (isToolRow(message) && PLAN_TOOLS.has(message.toolName ?? '')) {
       stepInTurn += 1;

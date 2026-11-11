@@ -158,3 +158,24 @@ test('a reply stopped by Anthropic safeguards is one notice, not a message (revi
   const notice = feed.items[1];
   assert.equal(notice.kind === 'safeguard' && notice.stop.category, 'cyber');
 });
+
+test('thoughts stay hidden by default and become folded lines between steps when shown', () => {
+  const messages: ChatMessage[] = [
+    { type: 'user', content: 'Сними скрины', timestamp: T(5) },
+    tool('Bash', { command: 'ls shots' }, { content: 'a' }, 6),
+    { type: 'assistant', isThinking: true, content: 'Скрины во временной папке.', timestamp: T(7) },
+    { type: 'assistant', isThinking: true, content: 'Перенесу их в проект.', timestamp: T(7) },
+    { type: 'assistant', isThinking: true, content: '   ', timestamp: T(7) },
+    tool('Bash', { command: 'cp shots docs' }, { content: 'ok' }, 8),
+    { type: 'assistant', content: 'Готово.', timestamp: T(9) },
+  ];
+  assert.deepEqual(buildChatFeed(messages, Date.parse(T(10))).items.map((item) => item.kind), ['user', 'journal', 'assistant']);
+
+  const { items, lastTurnSteps } = buildChatFeed(messages, Date.parse(T(10)), { showThoughts: true });
+  assert.deepEqual(items.map((item) => item.kind), ['user', 'journal', 'thought', 'journal', 'assistant']);
+  const thought = items[2];
+  assert.equal(thought.kind === 'thought' && thought.text, 'Скрины во временной папке.\n\nПеренесу их в проект.');
+  const second = items[3];
+  assert.equal(second.kind === 'journal' && second.steps[0].n, 2, 'steps keep counting across a thought');
+  assert.equal(lastTurnSteps, 2);
+});

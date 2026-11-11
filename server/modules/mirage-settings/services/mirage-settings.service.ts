@@ -73,7 +73,7 @@ function buildDefaults(env: NodeJS.ProcessEnv): DatabaseSettings {
       quietHours: { enabled: true, from: '23:00', to: '08:00' },
     },
     home: { widgets: WIDGET_IDS.map((id) => ({ id, enabled: DEFAULT_WIDGETS_ON.includes(id) })) },
-    appearance: { theme: 'cabin', density: 'normal' },
+    appearance: { theme: 'cabin', density: 'normal', showThoughts: true },
     profile: { displayName: '', timeZone: '' },
   };
 }
@@ -174,7 +174,7 @@ const PATCH_SCHEMA: Schema = {
     quietHours: { enabled: boolean, from: clockTime, to: clockTime },
   },
   home: { widgets },
-  appearance: { theme: oneOf('cabin', 'light'), density: oneOf('normal', 'compact') },
+  appearance: { theme: oneOf('cabin', 'light'), density: oneOf('normal', 'compact'), showThoughts: boolean },
   profile: { displayName, timeZone },
 };
 

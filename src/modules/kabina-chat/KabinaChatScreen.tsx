@@ -190,7 +190,10 @@ export default function KabinaChatScreen(props: KabinaChatScreenProps) {
   // Phone sheet: the locked Bypass explanation (DarkStates E2) unfolded under «ПРАВА».
   const [isPhoneBypassOpen, setIsPhoneBypassOpen] = useState(false);
   // The server says whether it runs as root (Claude Code refuses Bypass then) and where its home is.
-  const serverRuntime = useMirageSettingsView()?.server ?? null;
+  const settingsView = useMirageSettingsView();
+  const serverRuntime = settingsView?.server ?? null;
+  // Settings «Мысли Claude»: on until the settings say otherwise.
+  const showThoughts = settingsView?.settings.appearance.showThoughts ?? true;
   const runsAsRoot = serverRuntime?.isRoot ?? false;
   // File paths in the feed open in the Files screen; `~/` is the home folder of the panel's user.
   const homeDir = serverRuntime?.homeDir ?? null;
@@ -287,9 +290,9 @@ export default function KabinaChatScreen(props: KabinaChatScreenProps) {
   // the authors' message window counts thinking and folded subagent rows, so
   // its newest hundred could draw nothing at all.
   const feed = useMemo(
-    () => buildChatFeed(sessionState.chatMessages, now),
+    () => buildChatFeed(sessionState.chatMessages, now, { showThoughts }),
     // `now` only refreshes «идёт m:ss» of running agents; rebuild once a second while a turn runs.
-    [sessionState.chatMessages, now],
+    [sessionState.chatMessages, now, showThoughts],
   );
   const feedWindow = useFeedWindow({
     items: feed.items,
