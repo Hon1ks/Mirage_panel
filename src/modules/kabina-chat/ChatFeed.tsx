@@ -14,7 +14,7 @@ import {
   SteerArrow,
 } from '@/modules/kabina-chat/ChatIcons';
 import { AgentCard, TodoCard } from '@/modules/kabina-chat/ChatWork';
-import { plural } from '@/modules/kabina-chat/utils/chatFormat';
+import { modelBadge, plural } from '@/modules/kabina-chat/utils/chatFormat';
 import type { LiveAgentSample } from '@/modules/kabina-chat/utils/agentWork';
 import type { FeedItem, FeedStep, TurnStopSummary } from '@/modules/kabina-chat/utils/chatFeed';
 import { apiErrorChip, resultText, stepFilePath } from '@/modules/kabina-chat/utils/chatFeed';
@@ -242,17 +242,21 @@ const FeedRow = memo(function FeedRow({ item, isPhone, attached, isArtifactOpen,
           {item.text && <p className="kbc-text">{item.text}</p>}
         </article>
       );
-    case 'assistant':
+    case 'assistant': {
+      // Which model wrote this reply (from the transcript or the live stream), when it is known.
+      const badge = modelBadge(item.message.model);
       return (
         <article className="kbc-claude">
           <div className="kbc-who kbc-claude-who kb-m">
             <ClaudeMark />
             <span className="kbc-who-claude">CLAUDE</span>
+            {badge && <span className="kbc-who-model" title={item.message.model}>{badge}</span>}
             <span>{item.time}</span>
           </div>
           <StreamingMarkdown content={item.text} isStreaming={item.isStreaming} className="kbc-md" />
         </article>
       );
+    }
     case 'thought':
       return (
         <div className="kbc-claude" style={attached ? { marginTop: -12 } : undefined}>

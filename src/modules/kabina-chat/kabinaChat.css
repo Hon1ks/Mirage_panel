@@ -1109,6 +1109,14 @@
   color: var(--kb-signal);
 }
 
+/* Модель, написавшая ответ: «CLAUDE · OPUS 5.5» */
+.kbc-who-model {
+  padding: 1px 6px;
+  border: 1px solid var(--kb-line);
+  border-radius: 3px;
+  color: var(--kb-soft);
+}
+
 .kbc-steered {
   display: inline-flex;
   align-items: center;

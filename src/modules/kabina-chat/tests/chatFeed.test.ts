@@ -4,7 +4,7 @@ import { afterAll, beforeAll, test } from 'vitest';
 
 import { browserTimeZone, setPanelTimeZone } from '@/modules/kabina';
 import { buildChatFeed, describeStepArgument, describeStepResult, readApiError, summarizeSteps } from '@/modules/kabina-chat/utils/chatFeed';
-import { formatMegabytes, formatPercent, formatSessionTime, formatTokens } from '@/modules/kabina-chat/utils/chatFormat';
+import { formatMegabytes, formatPercent, formatSessionTime, formatTokens, modelBadge } from '@/modules/kabina-chat/utils/chatFormat';
 import type { ChatMessage } from '@/shared/types';
 
 const T = (minute: number) => new Date(2026, 9, 26, 14, minute).toISOString();
@@ -178,4 +178,14 @@ test('thoughts stay hidden by default and become folded lines between steps when
   const second = items[3];
   assert.equal(second.kind === 'journal' && second.steps[0].n, 2, 'steps keep counting across a thought');
   assert.equal(lastTurnSteps, 2);
+});
+
+test('a reply header names its model with the version', () => {
+  assert.equal(modelBadge('claude-opus-5-5'), 'OPUS 5.5');
+  assert.equal(modelBadge('claude-fable-5-1'), 'FABLE 5.1');
+  assert.equal(modelBadge('claude-sonnet-5-5[1m]'), 'SONNET 5.5');
+  assert.equal(modelBadge('claude-haiku-5'), 'HAIKU 5');
+  assert.equal(modelBadge('opus'), 'OPUS');
+  assert.equal(modelBadge('<synthetic>'), null);
+  assert.equal(modelBadge(undefined), null);
 });

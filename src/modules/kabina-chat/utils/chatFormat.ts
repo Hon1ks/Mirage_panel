@@ -98,3 +98,16 @@ export function plural(n: number, one: string, few: string, many: string): strin
   if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
   return many;
 }
+
+/**
+ * The model that wrote a reply, for its «CLAUDE · OPUS 5.5» header: «claude-fable-5-1» →
+ * «FABLE 5.1», «claude-sonnet-5-5[1m]» → «SONNET 5.5»; null when the reply does not say.
+ */
+export function modelBadge(model: string | null | undefined): string | null {
+  const id = model?.trim();
+  if (!id || id === '<synthetic>') return null;
+  const known = /(opus|sonnet|haiku|fable)(?:-(\d+)(?:-(\d{1,2}))?(?=$|[-[]))?/i.exec(id);
+  if (!known) return id.length > 24 ? `${id.slice(0, 23)}…` : id.toUpperCase();
+  const version = known[2] ? ` ${known[2]}${known[3] ? `.${known[3]}` : ''}` : '';
+  return `${known[1].toUpperCase()}${version}`;
+}
