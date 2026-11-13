@@ -70,31 +70,34 @@ export function FilesContextMenu({ x, y, title, items, onClose }: FilesContextMe
     };
   }, [onClose]);
 
+  // Inside `.kb-portal`: the Kabina colour tokens live there, outside it the menu had no background.
   return createPortal(
-    <div ref={menuRef} className="kf-menu kb-bz kb-fadein" role="menu" aria-label={`Действия: ${title}`} style={position}>
-      <div className="kb-m kf-menu-title">{title}</div>
-      {items.map((item, index) => (
-        item.kind === 'separator' ? (
-          <div key={`sep-${index}`} className="kf-menu-sep" role="separator" />
-        ) : (
-          <button
-            key={item.label}
-            type="button"
-            role="menuitem"
-            className="kf-menu-item"
-            data-danger={item.danger ? '' : undefined}
-            disabled={item.disabled}
-            title={item.disabled ? item.hint : undefined}
-            onClick={() => {
-              onClose();
-              item.onSelect();
-            }}
-          >
-            <span className="kf-menu-icon" aria-hidden="true">{item.icon}</span>
-            {item.label}
-          </button>
-        )
-      ))}
+    <div className="kb-portal">
+      <div ref={menuRef} className="kf-menu kb-bz kb-fadein" role="menu" aria-label={`Действия: ${title}`} style={position}>
+        <div className="kb-m kf-menu-title">{title}</div>
+        {items.map((item, index) => (
+          item.kind === 'separator' ? (
+            <div key={`sep-${index}`} className="kf-menu-sep" role="separator" />
+          ) : (
+            <button
+              key={item.label}
+              type="button"
+              role="menuitem"
+              className="kf-menu-item"
+              data-danger={item.danger ? '' : undefined}
+              disabled={item.disabled}
+              title={item.disabled ? item.hint : undefined}
+              onClick={() => {
+                onClose();
+                item.onSelect();
+              }}
+            >
+              <span className="kf-menu-icon" aria-hidden="true">{item.icon}</span>
+              {item.label}
+            </button>
+          )
+        ))}
+      </div>
     </div>,
     document.body,
   );
