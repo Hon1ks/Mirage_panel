@@ -1496,3 +1496,156 @@
     padding: 14px 20px 16px;
   }
 }
+
+/* Выбор нескольких (Ctrl/⌘-клик, «Выбрать», пункт меню): галочка в строке и панель действий */
+
+.kf-tick {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--kb-line-strong);
+  border-radius: 3px;
+  color: var(--kb-bg);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.kf-tick[data-on] {
+  background: var(--kb-signal);
+  border-color: var(--kb-signal);
+}
+
+.kf-row[data-checked] {
+  background-color: rgba(255, 106, 43, 0.06);
+}
+
+.kf-selbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 6px 8px 6px 14px;
+  background: var(--kb-panel);
+  border: 1px solid rgba(255, 106, 43, 0.4);
+  border-radius: 6px;
+}
+
+.kf-selbar-count {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  color: var(--kb-signal-text);
+}
+
+/* Меню по правой кнопке */
+
+.kf-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 220px;
+  max-width: min(300px, calc(100vw - 16px));
+  padding: 6px;
+  background: var(--kb-panel);
+  border: 1px solid var(--kb-line-strong);
+  border-radius: 6px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.kf-menu-title {
+  padding: 4px 8px 6px;
+  font-size: 10.5px;
+  color: var(--kb-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kf-menu-item {
+  width: 100%;
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  color: var(--kb-text);
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kf-menu-item:hover:not(:disabled),
+.kf-menu-item:focus-visible {
+  background: rgba(255, 106, 43, 0.1);
+  color: var(--kb-signal-text);
+  outline: none;
+}
+
+.kf-menu-item:disabled {
+  color: var(--kb-dim);
+  cursor: not-allowed;
+}
+
+.kf-menu-item[data-danger]:not(:disabled) {
+  color: var(--kb-signal-text);
+}
+
+.kf-menu-icon {
+  width: 16px;
+  display: inline-flex;
+  justify-content: center;
+  color: var(--kb-soft);
+}
+
+.kf-menu-sep {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--kb-line);
+}
+
+/* «Копировать в…» / «Переместить в…» */
+
+.kf-move {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kf-move-label {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  color: var(--kb-mute);
+}
+
+.kf-move-select {
+  height: 40px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+
+.kf-move-crumbs {
+  flex-wrap: wrap;
+}
+
+.kf-move-list {
+  max-height: min(44vh, 360px);
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--kb-bg);
+  border: 1px solid var(--kb-line);
+  border-radius: 6px;
+}
+
+.kf-move-list .kf-row:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (pointer: coarse) {
+  .kf-menu-item {
+    min-height: 44px;
+  }
+}

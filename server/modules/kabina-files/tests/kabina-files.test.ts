@@ -23,11 +23,11 @@ async function withWorkspace(run: (context: { root: string; project: string; arc
   }
 }
 
-function serviceFor(root: string, project: string, archive: string) {
+function serviceFor(root: string, project: string, archive: string, other: string | null = null) {
   return createKabinaFilesService({
     workspaceRoot: root,
     archiveRoot: archive,
-    getProjectPathById: (projectId) => (projectId === 'p1' ? project : null),
+    getProjectPathById: (projectId) => (projectId === 'p1' ? project : projectId === 'p2' ? other : null),
     now: () => new Date('2026-10-26T09:00:00Z'),
   });
 }
@@ -170,4 +170,68 @@ test('page numbers in the query must be non-negative integers', () => {
   assert.equal(readPageNumber('200', 'offset'), 200);
   assert.throws(() => readPageNumber('-1', 'offset'));
   assert.throws(() => readPageNumber('abc', 'limit'));
+});
+
+test('copy keeps the original and never overwrites; move carries a folder to another project', async () => {
+  await withWorkspace(async ({ root, project, archive }) => {
+    const other = path.join(root, 'blog');
+    await mkdir(path.join(other, 'drafts'), { recursive: true });
+    await mkdir(path.join(project, 'docs'));
+    await writeFile(path.join(project, 'docs', 'a.md'), '# A');
+    await writeFile(path.join(project, 'readme.md'), 'R');
+    const service = serviceFor(root, project, archive, other);
+
+    // Copy into the same folder: a second file, « (2)», the first untouched.
+    const copied = await service.transferEntries({ projectId: 'p1', paths: ['readme.md'], toProjectId: 'p1', toFolder: project, mode: 'copy' });
+    assert.equal(copied.items[0].to, path.join(project, 'readme (2).md'));
+    assert.equal(await readFile(path.join(project, 'readme.md'), 'utf8'), 'R');
+
+    // A folder and a file inside it picked together: the folder carries the file once.
+    const moved = await service.transferEntries({
+      projectId: 'p1', paths: [path.join(project, 'docs'), path.join(project, 'docs', 'a.md')], toProjectId: 'p2', toFolder: 'drafts', mode: 'move',
+    });
+    assert.equal(moved.items.length, 1);
+    assert.equal(await readFile(path.join(other, 'drafts', 'docs', 'a.md'), 'utf8'), '# A');
+    await assert.rejects(readFile(path.join(project, 'docs', 'a.md')));
+  });
+});
+
+test('nothing lands in itself or outside a project', async () => {
+  await withWorkspace(async ({ root, project, archive, outside }) => {
+    await mkdir(path.join(project, 'docs', 'deep'), { recursive: true });
+    await symlink(outside, path.join(project, 'out'));
+    const service = serviceFor(root, project, archive);
+    await assert.rejects(
+      service.transferEntries({ projectId: 'p1', paths: ['docs'], toProjectId: 'p1', toFolder: 'docs/deep', mode: 'move' }),
+      (error: unknown) => error instanceof AppError && error.code === 'KABINA_FILES_INTO_ITSELF',
+    );
+    // A link inside the project that points outside is not a way out.
+    await assert.rejects(
+      service.transferEntries({ projectId: 'p1', paths: ['docs'], toProjectId: 'p1', toFolder: 'out', mode: 'copy' }),
+      (error: unknown) => error instanceof AppError && error.statusCode === 403,
+    );
+    await assert.rejects(
+      service.transferEntries({ projectId: 'p1', paths: [], toProjectId: 'p1', toFolder: project, mode: 'copy' }),
+      (error: unknown) => error instanceof AppError && error.statusCode === 400,
+    );
+  });
+});
+
+test('a zip packs folders and files but leaves out links and secrets', async () => {
+  await withWorkspace(async ({ root, project, archive, outside }) => {
+    await mkdir(path.join(project, 'docs', '.ssh'), { recursive: true });
+    await writeFile(path.join(project, 'docs', 'a.md'), '# A');
+    await writeFile(path.join(project, 'docs', '.env'), 'SECRET=1');
+    await writeFile(path.join(project, 'docs', '.ssh', 'id_ed25519'), 'KEY');
+    await writeFile(path.join(outside, 'secret.txt'), 'чужой');
+    await symlink(outside, path.join(project, 'docs', 'out'));
+    const service = serviceFor(root, project, archive);
+
+    const { fileName, skipped, zip } = await service.zipEntries({ projectId: 'p1', paths: ['docs'] });
+    assert.equal(fileName, 'docs.zip');
+    const names = Object.values(zip.files).filter((entry) => !entry.dir).map((entry) => entry.name);
+    assert.deepEqual(names, ['docs/a.md']);
+    assert.equal(await zip.file('docs/a.md')?.async('string'), '# A');
+    assert.equal(skipped, 3, '.env, .ssh and the link');
+  });
 });

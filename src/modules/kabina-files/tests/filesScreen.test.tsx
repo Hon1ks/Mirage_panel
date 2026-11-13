@@ -33,7 +33,7 @@ const jsonResponse = (data: unknown) => new Response(JSON.stringify({ success: t
 const plainResponse = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
 
 const apiMock = vi.hoisted(() => ({
-  kabinaFiles: { folder: vi.fn(), archive: vi.fn(), restore: vi.fn(), upload: vi.fn() },
+  kabinaFiles: { folder: vi.fn(), archive: vi.fn(), restore: vi.fn(), upload: vi.fn(), transfer: vi.fn(), zip: vi.fn() },
   git: { status: vi.fn() },
   home: { overview: vi.fn() },
   readFile: vi.fn(),
@@ -286,4 +286,38 @@ test('while the project list is loading, no /root page is read and no «Серв
     .filter(([, options]) => (options as { limit?: number } | undefined)?.limit !== 1)
     .map(([folderPath]) => folderPath);
   assert.deepEqual([...new Set(pages)], ['/home/user/Documents/Claude Code/Проекты']);
+});
+
+test('right-click opens the row menu; «Новый файл здесь» creates a file in that folder', async () => {
+  await renderFiles();
+  apiMock.createFile.mockImplementation(async () => plainResponse({ success: true }));
+  fireEvent.contextMenu(screen.getByRole('treeitem', { name: /docs/ }), { clientX: 40, clientY: 60 });
+  const menu = screen.getByRole('menu', { name: 'Действия: docs' });
+  assert.ok(within(menu).getByRole('menuitem', { name: 'Переместить в…' }));
+  fireEvent.click(within(menu).getByRole('menuitem', { name: 'Новый файл здесь' }));
+  assert.equal(screen.queryByRole('menu'), null, 'the menu closes on a choice');
+  const field = screen.getByLabelText('НОВЫЙ ФАЙЛ В docs/');
+  fireEvent.change(field, { target: { value: 'план.md' } });
+  fireEvent.keyDown(field, { key: 'Enter' });
+  await flush();
+  assert.deepEqual(apiMock.createFile.mock.calls[0], ['p-zag', { path: `${ROOT}/docs`, type: 'file', name: 'план.md' }]);
+});
+
+test('Ctrl-click ticks rows; «Переместить в…» sends them to the folder picked in the window', async () => {
+  await renderFiles();
+  apiMock.kabinaFiles.transfer.mockImplementation(async () => jsonResponse({ mode: 'move', items: [{ from: `${ROOT}/README.md`, to: `${ROOT}/docs/README.md` }, { from: `${ROOT}/deploy.sh`, to: `${ROOT}/docs/deploy.sh` }], unchanged: 0 }));
+  fireEvent.click(screen.getByRole('treeitem', { name: /README\.md/ }), { ctrlKey: true });
+  fireEvent.click(screen.getByRole('treeitem', { name: /deploy\.sh/ }), { ctrlKey: true });
+  const bar = screen.getByRole('toolbar', { name: 'Действия с выбранным' });
+  assert.ok(within(bar).getByText('ВЫБРАНО 2'));
+  fireEvent.click(within(bar).getByRole('button', { name: /Переместить в…/ }));
+  await flush();
+  const dialog = screen.getByRole('dialog', { name: 'ПЕРЕМЕСТИТЬ В…' });
+  fireEvent.click(within(within(dialog).getByRole('group', { name: 'Папки внутри' })).getByRole('button', { name: /docs/ }));
+  await flush();
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Переместить сюда' }));
+  await flush();
+  assert.deepEqual(apiMock.kabinaFiles.transfer.mock.calls[0], ['p-zag', { paths: [`${ROOT}/README.md`, `${ROOT}/deploy.sh`], toProjectId: 'p-zag', toFolder: `${ROOT}/docs`, mode: 'move' }]);
+  assert.ok(screen.getByText('Перенесено 2 объекта в docs/'));
+  assert.equal(screen.queryByRole('toolbar', { name: 'Действия с выбранным' }), null, 'the selection is cleared');
 });

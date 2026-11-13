@@ -2,7 +2,10 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import JSZip from 'jszip';
+
 import { projectsDb } from '@/modules/database/index.js';
+import { isPrivateWorkspacePath } from '@/modules/file-tree/index.js';
 import { AppError, normalizeProjectPath, resolvePathUnderRoots, WORKSPACES_ROOT } from '@/shared/utils.js';
 
 /** A page of a folder never holds more than this many entries (the screen asks for 200). */
@@ -10,6 +13,11 @@ const MAX_PAGE_SIZE = 500;
 const DEFAULT_PAGE_SIZE = 200;
 /** How many hidden names the footer spells out («скрыто 2: .git, .env»). */
 const HIDDEN_NAMES_SHOWN = 4;
+/** One copy / move / zip request takes at most this many picked entries. */
+const MAX_PICKED = 500;
+/** A zip is built in memory on a small server: past these it is refused rather than started. */
+const MAX_ZIP_FILES = 5000;
+const MAX_ZIP_BYTES = 150 * 1024 * 1024;
 
 /** One entry of a folder page. `childCount` is the folder's own entry count (null for files or unreadable folders). */
 type KabinaFileEntry = {
@@ -61,6 +69,24 @@ function notFound(message: string): AppError {
 
 function forbidden(message: string): AppError {
   return new AppError(message, { code: 'KABINA_FILES_FORBIDDEN', statusCode: 403 });
+}
+
+function badRequest(message: string, code = 'KABINA_FILES_BAD_REQUEST'): AppError {
+  return new AppError(message, { code, statusCode: 400 });
+}
+
+/** The picked paths: at least one, at most MAX_PICKED, each a non-empty string. */
+function readPicked(paths: unknown): string[] {
+  if (!Array.isArray(paths) || paths.length === 0 || paths.some((item) => typeof item !== 'string' || !item.trim())) {
+    throw badRequest('Не выбрано ни одного файла');
+  }
+  if (paths.length > MAX_PICKED) throw badRequest(`За раз — не больше ${MAX_PICKED} файлов и папок`);
+  return [...new Set(paths as string[])];
+}
+
+/** Drops picked entries that sit inside another picked folder: the folder carries them along. */
+function outermost(paths: string[]): string[] {
+  return paths.filter((candidate) => !paths.some((other) => other !== candidate && isInside(other, candidate)));
 }
 
 function isInside(root: string, candidate: string): boolean {
@@ -147,14 +173,25 @@ export function createKabinaFilesService(overrides: Partial<KabinaFilesDependenc
   }
 
   /** A path of the project (absolute or project-relative), resolved, that is inside it and not the project folder itself. */
-  async function resolveInsideProject(projectRoot: string, targetPath: string): Promise<string> {
+  async function resolveInsideProject(projectRoot: string, targetPath: string, outsideMessage = 'В архив можно убрать только то, что лежит внутри проекта'): Promise<string> {
     const absolute = path.isAbsolute(targetPath) ? targetPath : path.join(projectRoot, targetPath);
     // The entry itself is not followed (a symlink is archived as a link), only its parent folder.
     const parent = await fs.realpath(path.dirname(path.resolve(absolute))).catch(() => null);
     if (!parent) throw notFound('Файл или папка не найдены');
     const resolved = path.join(parent, path.basename(absolute));
-    if (!isInside(projectRoot, resolved)) throw forbidden('В архив можно убрать только то, что лежит внутри проекта');
+    if (!isInside(projectRoot, resolved)) throw forbidden(outsideMessage);
     return resolved;
+  }
+
+  /** A project folder (the project itself or a folder inside it) that copies and moves may land in. */
+  async function resolveTargetFolder(projectRoot: string, folderPath: string): Promise<string> {
+    const absolute = path.isAbsolute(folderPath) ? folderPath : path.join(projectRoot, folderPath);
+    const real = await fs.realpath(absolute).catch(() => null);
+    if (!real) throw notFound('Папка назначения не найдена');
+    if (real !== projectRoot && !isInside(projectRoot, real)) throw forbidden('Класть можно только в папку проекта');
+    const stats = await fs.stat(real);
+    if (!stats.isDirectory()) throw badRequest('Назначение — файл, а не папка', 'NOT_A_DIRECTORY');
+    return real;
   }
 
   async function countEntries(folder: string, showHidden: boolean): Promise<number | null> {
@@ -255,6 +292,119 @@ export function createKabinaFilesService(overrides: Partial<KabinaFilesDependenc
       const destination = await freePath(path.join(dependencies.archiveRoot, 'files', day, path.basename(projectRoot), relative));
       await move(source, destination);
       return { originalPath: source, archivedPath: destination };
+    },
+
+    /**
+     * «Копировать в…» / «Переместить в…»: picked files and folders of one project into a
+     * folder of the same or another project. Nothing is overwritten: a taken name gets
+     * « (2)», like a copy in the same folder. Links are copied as links, never followed.
+     */
+    async transferEntries(input: {
+      projectId: string;
+      paths: unknown;
+      toProjectId: string;
+      toFolder: string;
+      mode: 'copy' | 'move';
+    }): Promise<{ mode: 'copy' | 'move'; items: Array<{ from: string; to: string }>; unchanged: number }> {
+      const projectRoot = await resolveProjectRoot(input.projectId);
+      const sources = outermost(await Promise.all(readPicked(input.paths).map(async (picked) => {
+        const source = await resolveInsideProject(projectRoot, picked, 'Копировать и переносить можно только то, что лежит внутри проекта');
+        if (!(await pathExists(source))) throw notFound(`Нет такого: ${path.basename(source)}`);
+        return source;
+      })));
+      const targetRoot = await resolveProjectRoot(input.toProjectId);
+      const targetFolder = await resolveTargetFolder(targetRoot, input.toFolder);
+
+      for (const source of sources) {
+        if (targetFolder === source || isInside(source, targetFolder)) {
+          throw badRequest(`Папку ${path.basename(source)} нельзя положить в неё саму`, 'KABINA_FILES_INTO_ITSELF');
+        }
+      }
+
+      const items: Array<{ from: string; to: string }> = [];
+      let unchanged = 0;
+      for (const source of sources) {
+        // Moving into the folder it already lies in changes nothing.
+        if (input.mode === 'move' && path.dirname(source) === targetFolder) {
+          unchanged += 1;
+          continue;
+        }
+        const destination = await freePath(path.join(targetFolder, path.basename(source)));
+        if (input.mode === 'copy') {
+          await fs.cp(source, destination, { recursive: true, preserveTimestamps: true, verbatimSymlinks: true, errorOnExist: true, force: false });
+        } else {
+          await move(source, destination);
+        }
+        items.push({ from: source, to: destination });
+      }
+      return { mode: input.mode, items, unchanged };
+    },
+
+    /**
+     * «Скачать zip»: picked files and folders of a project packed into one archive.
+     * Links are left out (never followed out of the project), and so are keys,
+     * credentials and the panel database (Н-7). Over the size limits it is refused.
+     */
+    async zipEntries(input: { projectId: string; paths: unknown }): Promise<{ fileName: string; skipped: number; zip: JSZip }> {
+      const projectRoot = await resolveProjectRoot(input.projectId);
+      const sources = outermost(await Promise.all(readPicked(input.paths).map(async (picked) => {
+        const absolute = path.isAbsolute(picked) ? picked : path.join(projectRoot, picked);
+        const real = await fs.realpath(absolute).catch(() => null);
+        if (!real) throw notFound(`Нет такого: ${path.basename(absolute)}`);
+        if (real !== projectRoot && !isInside(projectRoot, real)) throw forbidden('Скачать архивом можно только то, что внутри проекта');
+        return real;
+      })));
+
+      const zip = new JSZip();
+      let files = 0;
+      let bytes = 0;
+      let skipped = 0;
+      const tooBig = () => new AppError(
+        `Слишком много для одного архива (больше ${MAX_ZIP_FILES} файлов или ${Math.round(MAX_ZIP_BYTES / 1024 / 1024)} МБ) — выбери папку поменьше`,
+        { code: 'KABINA_FILES_ZIP_TOO_BIG', statusCode: 413 },
+      );
+
+      const add = async (absolute: string, nameInZip: string): Promise<void> => {
+        if (absolute !== projectRoot && isPrivateWorkspacePath(projectRoot, absolute)) {
+          skipped += 1;
+          return;
+        }
+        const stats = await fs.lstat(absolute).catch(() => null);
+        if (!stats || stats.isSymbolicLink()) {
+          skipped += 1;
+          return;
+        }
+        if (stats.isDirectory()) {
+          zip.folder(nameInZip);
+          const names = await fs.readdir(absolute).catch(() => null);
+          if (!names) {
+            skipped += 1;
+            return;
+          }
+          for (const name of names.sort()) await add(path.join(absolute, name), `${nameInZip}/${name}`);
+          return;
+        }
+        if (!stats.isFile()) {
+          skipped += 1;
+          return;
+        }
+        files += 1;
+        bytes += stats.size;
+        if (files > MAX_ZIP_FILES || bytes > MAX_ZIP_BYTES) throw tooBig();
+        // Read one at a time: thousands of files must not hold thousands of open handles.
+        zip.file(nameInZip, await fs.readFile(absolute), { date: stats.mtime });
+      };
+
+      const taken = new Set<string>();
+      for (const source of sources) {
+        // Two picked entries with one name (from different folders) get « (2)» in the archive.
+        let name = path.basename(source);
+        for (let index = 2; taken.has(name); index += 1) name = `${path.basename(source)} (${index})`;
+        taken.add(name);
+        await add(source, name);
+      }
+      const fileName = sources.length === 1 ? `${path.basename(sources[0])}.zip` : `${path.basename(projectRoot)}-файлы.zip`;
+      return { fileName, skipped, zip };
     },
 
     /** «Вернуть»: moves an archived entry back to where it was, if that place is still free. */

@@ -176,7 +176,8 @@ const PRIVATE_FILE_PATTERNS = [
   /^\.credentials\.json$/i, /^\.claude\.json/i, /^\.(netrc|npmrc|pypirc|git-credentials)$/i, /_history$/i,
 ];
 
-function isPrivateWorkspacePath(realWorkspaceRoot: string, realTargetPath: string): boolean {
+/** Also used by the Kabina «Файлы» zip download, which leaves these out of an archive. */
+export function isPrivateWorkspacePath(realWorkspaceRoot: string, realTargetPath: string): boolean {
   const segments = path.relative(realWorkspaceRoot, realTargetPath).split(path.sep).filter(Boolean);
   return segments.some((segment) => PRIVATE_DIRECTORY_NAMES.has(segment))
     || PRIVATE_FILE_PATTERNS.some((pattern) => pattern.test(path.basename(realTargetPath)));

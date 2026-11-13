@@ -13,7 +13,9 @@ import {
   ChatGlyph,
   CopyGlyph,
   DownloadGlyph,
+  MoveGlyph,
   PencilGlyph,
+  ZipGlyph,
 } from '@/modules/kabina-files/FilesIcons';
 import {
   TEXT_PREVIEW_MAX_BYTES,
@@ -98,6 +100,15 @@ type FilePreviewProps = {
   onArchive: () => void;
   /** The line a `path:line` link from the chat points at: the code preview opens around it. */
   focusLine?: number | null;
+  /** «Переименовать» from the tree's menu: the entry whose name field opens; cleared through `onRenameStarted`. */
+  renameFor?: string | null;
+  onRenameStarted?: () => void;
+  /** «Копировать в…» / «Переместить в…» are allowed for the entry (it lies in a project). */
+  canTransfer?: boolean;
+  onTransfer?: (mode: 'copy' | 'move') => void;
+  /** «Скачать zip» of a folder, and whether one is being built. */
+  onZip?: () => void;
+  isZipping?: boolean;
 };
 
 function useFileContent(entry: KabinaFileEntry | null, kind: PreviewKind, projectId: string | null): LoadedContent {
@@ -214,6 +225,14 @@ export default function FilePreview(props: FilePreviewProps) {
     setCopied(false);
     setDownloadError(null);
   }, [entry?.path]);
+
+  // Declared after the reset above, so a rename asked together with a new selection wins.
+  useEffect(() => {
+    if (!entry || !props.renameFor || props.renameFor !== entry.path || !props.canEdit) return;
+    setRenameValue(entry.name);
+    setIsRenaming(true);
+    props.onRenameStarted?.();
+  }, [entry?.path, props.renameFor, props.canEdit]);
 
   useEffect(() => {
     if (isRenaming) renameRef.current?.select();
@@ -499,9 +518,15 @@ export default function FilePreview(props: FilePreviewProps) {
         <Button variant={canOpenWhole ? 'ghost' : 'pri'} disabled={askDisabled} onClick={() => props.onOpenInChat('')}>
           <ChatGlyph />Открыть в чате
         </Button>
-        <Button variant="ghost" disabled={!entry || isDirectory || !props.readProjectId} onClick={() => void download()}>
-          <DownloadGlyph />Скачать
-        </Button>
+        {isDirectory ? (
+          <Button variant="ghost" disabled={!entry || !props.canTransfer || !props.onZip || props.isZipping} title={props.canTransfer ? undefined : 'Архивом можно скачать только папку внутри проекта'} onClick={() => props.onZip?.()}>
+            <ZipGlyph />{props.isZipping ? 'Собираю…' : 'Скачать zip'}
+          </Button>
+        ) : (
+          <Button variant="ghost" disabled={!entry || !props.readProjectId} onClick={() => void download()}>
+            <DownloadGlyph />Скачать
+          </Button>
+        )}
         {downloadError && (
           <span className="kf-ask-note" role="alert" style={{ flexBasis: '100%', color: 'var(--kb-signal-text)' }}>{downloadError}</span>
         )}
@@ -544,6 +569,24 @@ export default function FilePreview(props: FilePreviewProps) {
         </button>
         <button type="button" className="kf-quiet" data-done={copied ? '' : undefined} disabled={!entry} onClick={() => void copyPath()}>
           <CopyGlyph />{copied ? 'Путь скопирован' : 'Копировать путь'}
+        </button>
+        <button
+          type="button"
+          className="kf-quiet"
+          disabled={!entry || !props.canTransfer}
+          title={props.canTransfer ? 'Копия в другую папку или проект; ничего не перезапишется' : 'Только файлы и папки внутри проектов'}
+          onClick={() => props.onTransfer?.('copy')}
+        >
+          <CopyGlyph />Копировать в…
+        </button>
+        <button
+          type="button"
+          className="kf-quiet"
+          disabled={!entry || !props.canTransfer}
+          title={props.canTransfer ? 'Перенести в другую папку или проект' : 'Только файлы и папки внутри проектов'}
+          onClick={() => props.onTransfer?.('move')}
+        >
+          <MoveGlyph />Переместить в…
         </button>
         <span style={{ flex: 1 }} />
         <button

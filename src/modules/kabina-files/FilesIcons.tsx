@@ -34,6 +34,10 @@ export const ChatGlyph = (props: GlyphProps) => <Svg strokeWidth={1.8} {...props
 export const ArrowGlyph = (props: GlyphProps) => <Svg strokeWidth={2} {...props}><path d="M5 12h14M13 6l6 6-6 6" /></Svg>;
 export const PencilGlyph = (props: GlyphProps) => <Svg size={14} {...props}><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="M13.5 6.5l4 4" /></Svg>;
 export const CopyGlyph = (props: GlyphProps) => <Svg size={14} {...props}><rect x="8" y="8" width="12" height="12" rx="1.5" /><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" /></Svg>;
+export const FilePlusGlyph = (props: GlyphProps) => <Svg {...props}><path d="M6 3h8l4 4v14H6z" /><path d="M14 3v4h4M12 11v6M9 14h6" /></Svg>;
+export const MoveGlyph = (props: GlyphProps) => <Svg size={14} {...props}><path d={FOLDER} /><path d="M10 13h6M13.5 10.5L16 13l-2.5 2.5" /></Svg>;
+export const ZipGlyph = (props: GlyphProps) => <Svg size={14} {...props}><path d="M6 3h12v18H6z" /><path d="M11 3v2h2v2h-2v2h2v2h-2M10.5 14h3v3h-3z" /></Svg>;
+export const SelectGlyph = (props: GlyphProps) => <Svg {...props}><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M8 12l3 3 5-6" /></Svg>;
 export const CheckGlyph = (props: GlyphProps) => <Svg size={15} color="var(--kb-sage)" strokeWidth={1.8} {...props}><path d="M5 12l5 5 9-10" /></Svg>;
 
 /** The tree's file icons: document, code, picture, spreadsheet, generic. */

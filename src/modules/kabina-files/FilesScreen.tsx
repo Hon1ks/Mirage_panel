@@ -4,19 +4,29 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import '@/modules/kabina-files/kabinaFiles.css';
 import { Button, kabinaChatPath, NO_AUTOFILL, Sheet, StatusShape } from '@/modules/kabina';
 import FilePreview from '@/modules/kabina-files/FilePreview';
+import { FilesContextMenu } from '@/modules/kabina-files/FilesContextMenu';
+import type { FilesMenuItem } from '@/modules/kabina-files/FilesContextMenu';
 import {
   ArchiveGlyph,
   BranchGlyph,
   CheckGlyph,
+  CopyGlyph,
   DownloadGlyph,
   EyeGlyph,
+  FilePlusGlyph,
+  FileTypeGlyph,
   FilterGlyph,
   FolderGlyph,
   FolderPlusGlyph,
+  MoveGlyph,
+  PencilGlyph,
+  SelectGlyph,
   ServerGlyph,
   UploadGlyph,
+  ZipGlyph,
 } from '@/modules/kabina-files/FilesIcons';
 import FilesTree from '@/modules/kabina-files/FilesTree';
+import { TransferModal } from '@/modules/kabina-files/TransferModal';
 import { UploadConflictModal } from '@/modules/kabina-files/UploadConflictModal';
 import { useFolderPages } from '@/modules/kabina-files/hooks/useFolderPages';
 import { usePhoneLayout } from '@/modules/kabina-files/hooks/usePhoneLayout';
@@ -43,6 +53,36 @@ type Note =
   | { kind: 'error'; text: string };
 
 type GitState = { branch: string | null; changed: Set<string> };
+
+/** «Копировать в…» / «Переместить в…» waiting for a destination. */
+type PendingTransfer = { mode: 'copy' | 'move'; entries: KabinaFileEntry[] };
+
+/** The right-click menu of a tree row. */
+type RowMenu = { entry: KabinaFileEntry; x: number; y: number };
+
+/** Saves a blob under `name` through a temporary link (the browser's own download). */
+function saveBlob(blob: Blob, name: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** The archive's name from `Content-Disposition` (`filename*=UTF-8''…`), else `fallback`. */
+function readDownloadName(response: Response, fallback: string): string {
+  const header = response.headers.get('Content-Disposition') ?? '';
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(header)?.[1];
+  if (!encoded) return fallback;
+  try {
+    return decodeURIComponent(encoded);
+  } catch {
+    return fallback;
+  }
+}
 
 /** An upload the server refused over taken names, waiting in the conflict window for new ones. */
 type PendingUpload = { folder: string; files: File[]; names: string[]; conflicts: KabinaUploadConflict[]; attempt: number };
@@ -127,9 +167,20 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
   const [pendingSelect, setPendingSelect] = useState<string | null>(null);
   // Name filter over loaded folders.
   const [filter, setFilter] = useState('');
-  // «Новая папка» row and the name typed into it.
+  // «Новая папка» / «Новый файл» row, what it creates, where (null — the current folder) and the name typed.
   const [isNewFolderOpen, setIsNewFolderOpen] = useState(false);
+  const [newKind, setNewKind] = useState<'directory' | 'file'>('directory');
+  const [newTarget, setNewTarget] = useState<string | null>(null);
   const [newFolderName, setNewFolderName] = useState('');
+  // Entries ticked for a batch action, and whether «Выбрать» is on (a click ticks instead of opening).
+  const [checked, setChecked] = useState<Set<string>>(() => new Set());
+  const [isSelecting, setIsSelecting] = useState(false);
+  // The right-click menu, a copy / move waiting for its destination, and a rename asked from the menu.
+  const [rowMenu, setRowMenu] = useState<RowMenu | null>(null);
+  const [pendingTransfer, setPendingTransfer] = useState<PendingTransfer | null>(null);
+  const [renameFor, setRenameFor] = useState<string | null>(null);
+  // A zip being built on the server, for the buttons' label.
+  const [isZipping, setIsZipping] = useState(false);
   // The line above the tree: archived (with «Вернуть»), done, or an error.
   const [note, setNote] = useState<Note | null>(null);
   // Branch and changed files of the open project; null outside a repository.
@@ -175,6 +226,8 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
     setSelected(null);
     setFilter('');
     setNote(null);
+    setChecked(new Set());
+    setIsSelecting(false);
     // `places` only matters when there are no projects at all.
   }, [project?.path, projectsFolder]);
 
@@ -389,19 +442,231 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
     void refreshGit();
   };
 
+  /** Opens the «Новая папка» / «Новый файл» row for `folder` (null — the current folder). */
+  const openNewItem = (kind: 'directory' | 'file', folder: string | null = null) => {
+    setNewKind(kind);
+    setNewTarget(folder);
+    setNewFolderName('');
+    setIsNewFolderOpen(true);
+  };
+
   const createFolder = async () => {
-    const name = newFolderName.trim() || 'новая-папка';
-    if (!routeProjectId || !currentFolder || !canWriteIn(currentFolder)) return;
+    const folder = newTarget ?? currentFolder;
+    const isFile = newKind === 'file';
+    const name = newFolderName.trim() || (isFile ? 'новый-файл.md' : 'новая-папка');
+    if (!routeProjectId || !folder || !canWriteIn(folder)) return;
     try {
-      await readApiJson(await api.createFile(routeProjectId, { path: currentFolder, type: 'directory', name }));
+      await readApiJson(await api.createFile(routeProjectId, { path: folder, type: newKind, name }));
       setIsNewFolderOpen(false);
       setNewFolderName('');
-      setExpanded((current) => new Set(current).add(currentFolder));
-      await reloadFolder(currentFolder);
-      setPendingSelect(`${currentFolder}/${name}`);
+      setExpanded((current) => new Set(current).add(folder));
+      await reloadFolder(folder);
+      setPendingSelect(`${folder}/${name}`);
+      // A new file opens in the preview right away, ready for «Открыть целиком».
+      if (isFile) setIsSheetOpen(true);
     } catch (error) {
-      setNote({ kind: 'error', text: `Папка не создана: ${filesErrorText(error, 'ошибка на сервере')}` });
+      setNote({ kind: 'error', text: `${isFile ? 'Файл не создан' : 'Папка не создана'}: ${filesErrorText(error, 'ошибка на сервере')}` });
     }
+  };
+
+  /** The project an entry belongs to (the deepest one holding it), not counting the project folder itself. */
+  const ownerOf = (target: string): KabinaProjectRef | null => (
+    projects
+      .filter((candidate) => isWithin(candidate.path, target) && candidate.path !== target)
+      .sort((left, right) => right.path.length - left.path.length)[0] ?? null
+  );
+  const canEditPath = (target: string) => Boolean(ownerOf(target));
+  const editHint = 'Только файлы и папки внутри проектов';
+
+  const toggleChecked = (entry: KabinaFileEntry) => {
+    setChecked((current) => {
+      const next = new Set(current);
+      if (next.has(entry.path)) next.delete(entry.path);
+      else next.add(entry.path);
+      return next;
+    });
+  };
+
+  const clearChecked = () => {
+    setChecked(new Set());
+    setIsSelecting(false);
+  };
+
+  /** Ticked entries as loaded in the tree (a ticked one that has since gone is dropped). */
+  const checkedEntries = useMemo(() => {
+    const byPath = new Map<string, KabinaFileEntry>();
+    for (const folder of Object.values(folders)) for (const entry of folder.entries) byPath.set(entry.path, entry);
+    return [...checked].map((target) => byPath.get(target)).filter((entry): entry is KabinaFileEntry => Boolean(entry));
+  }, [checked, folders]);
+
+  /** Entries split by the project that holds them (the server acts on one project at a time). */
+  const groupByOwner = (entries: KabinaFileEntry[]) => {
+    const groups = new Map<string, KabinaFileEntry[]>();
+    for (const entry of entries) {
+      const owner = ownerOf(entry.path);
+      if (!owner) continue;
+      groups.set(owner.projectId, [...(groups.get(owner.projectId) ?? []), entry]);
+    }
+    return groups;
+  };
+
+  const countText = (count: number) => `${count} ${pluralRu(count, ['объект', 'объекта', 'объектов'])}`;
+
+  const transfer = async (target: { projectId: string; folder: string }) => {
+    if (!pendingTransfer) return;
+    const { mode, entries } = pendingTransfer;
+    let done = 0;
+    let unchanged = 0;
+    let lastTo: string | null = null;
+    // Errors go to the window, which stays open with the reason.
+    for (const [projectId, group] of groupByOwner(entries)) {
+      const body = await readApiJson<{ data: { items: Array<{ to: string }>; unchanged: number } }>(await api.kabinaFiles.transfer(projectId, {
+        paths: group.map((entry) => entry.path), toProjectId: target.projectId, toFolder: target.folder, mode,
+      }));
+      done += body.data.items.length;
+      unchanged += body.data.unchanged;
+      lastTo = body.data.items.at(-1)?.to ?? lastTo;
+    }
+    setPendingTransfer(null);
+    clearChecked();
+    const verb = mode === 'copy' ? 'Скопировано' : 'Перенесено';
+    const where = `${basename(target.folder)}/`;
+    setNote({ kind: 'ok', text: unchanged && !done ? `Уже лежит в ${where} — ничего не перенесено` : `${verb} ${countText(done)} в ${where}${unchanged ? ` (${unchanged} уже были там)` : ''}` });
+    if (mode === 'move') {
+      if (selected && entries.some((entry) => isWithin(entry.path, selected.path))) setSelected(null);
+      for (const folder of new Set(entries.map((entry) => parentOf(entry.path)))) void loadFolder(folder, true);
+    }
+    if (folders[target.folder]) await reloadFolder(target.folder);
+    else void refreshGit();
+    // One copy in sight: shown, so it is clear where it went.
+    if (done === 1 && lastTo && rootPath && isWithin(rootPath, lastTo) && folders[target.folder]) setPendingSelect(lastTo);
+  };
+
+  const downloadZip = async (entries: KabinaFileEntry[]) => {
+    const groups = groupByOwner(entries);
+    if (groups.size === 0) {
+      setNote({ kind: 'error', text: 'Архивом можно скачать только то, что лежит в проектах.' });
+      return;
+    }
+    setIsZipping(true);
+    try {
+      for (const [projectId, group] of groups) {
+        const response = await api.kabinaFiles.zip(projectId, group.map((entry) => entry.path));
+        // An error answer is JSON: readApiJson turns it into the server's reason.
+        if (!response.ok) await readApiJson(response);
+        const skipped = Number(response.headers.get('X-Kabina-Skipped') ?? 0);
+        saveBlob(await response.blob(), readDownloadName(response, group.length === 1 ? `${group[0].name}.zip` : 'файлы.zip'));
+        if (skipped > 0) {
+          setNote({ kind: 'ok', text: `Архив скачан; пропущено ${skipped}: ссылки и секреты (ключи, .env, базы панели) в архив не кладутся` });
+        }
+      }
+    } catch (error) {
+      setNote({ kind: 'error', text: `Архив не собран: ${filesErrorText(error, 'ошибка на сервере')}` });
+    } finally {
+      setIsZipping(false);
+    }
+  };
+
+  const downloadFile = async (entry: KabinaFileEntry) => {
+    const owner = ownerOf(entry.path);
+    const readId = owner?.projectId ?? readProjectId;
+    if (!readId) return;
+    try {
+      const response = await api.readFileBlob(readId, entry.path);
+      if (!response.ok) await readApiJson(response);
+      saveBlob(await response.blob(), entry.name);
+    } catch (error) {
+      setNote({ kind: 'error', text: `Не скачалось: ${filesErrorText(error, 'ошибка на сервере')}` });
+    }
+  };
+
+  const archiveMany = async (entries: KabinaFileEntry[]) => {
+    if (entries.length === 1) {
+      const [entry] = entries;
+      const owner = ownerOf(entry.path);
+      if (!owner) return;
+      try {
+        const body = await readApiJson<{ data: { originalPath: string; archivedPath: string } }>(await api.kabinaFiles.archive(owner.projectId, entry.path));
+        setNote({ kind: 'archived', name: entry.name, projectId: owner.projectId, ...body.data });
+        if (selected && isWithin(entry.path, selected.path)) setSelected(null);
+        clearChecked();
+        await reloadFolder(parentOf(entry.path));
+      } catch (error) {
+        setNote({ kind: 'error', text: `Не перенёс в архив: ${filesErrorText(error, 'ошибка на сервере')}` });
+      }
+      return;
+    }
+    let done = 0;
+    let failed = 0;
+    for (const entry of entries) {
+      const owner = ownerOf(entry.path);
+      if (!owner) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await readApiJson(await api.kabinaFiles.archive(owner.projectId, entry.path));
+        done += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (selected && entries.some((entry) => isWithin(entry.path, selected.path))) setSelected(null);
+    clearChecked();
+    setNote(failed
+      ? { kind: 'error', text: `В архив: ${done} из ${entries.length}, ${failed} не получилось` }
+      : { kind: 'ok', text: `${countText(done)} перенесено в ~/.claude/archive — не удалены, вернуть можно из «Архив»` });
+    for (const folder of new Set(entries.map((entry) => parentOf(entry.path)))) void loadFolder(folder, true);
+    void refreshGit();
+  };
+
+  const copyPathOf = async (entry: KabinaFileEntry) => {
+    try {
+      await navigator.clipboard.writeText(entry.path);
+      setNote({ kind: 'ok', text: `Путь скопирован: ${tildePath(entry.path)}` });
+    } catch {
+      setNote({ kind: 'error', text: 'Браузер не дал доступ к буферу обмена.' });
+    }
+  };
+
+  /** What the right-click menu of `entry` offers; actions that need a project are greyed with the reason. */
+  const menuItems = (entry: KabinaFileEntry): FilesMenuItem[] => {
+    const isFolder = entry.type === 'directory';
+    const editable = canEditPath(entry.path);
+    const writableHere = isFolder && canWriteIn(entry.path);
+    const items: FilesMenuItem[] = [];
+    if (isFolder) {
+      items.push({ kind: 'item', label: expanded.has(entry.path) ? 'Свернуть' : 'Открыть', icon: <FolderGlyph size={14} />, onSelect: () => toggleFolder(entry) });
+      items.push({ kind: 'item', label: 'Новый файл здесь', icon: <FilePlusGlyph size={14} />, disabled: !writableHere, hint: writeHint, onSelect: () => openNewItem('file', entry.path) });
+      items.push({ kind: 'item', label: 'Новая папка здесь', icon: <FolderPlusGlyph size={14} />, disabled: !writableHere, hint: writeHint, onSelect: () => openNewItem('directory', entry.path) });
+    } else {
+      items.push({ kind: 'item', label: 'Открыть', icon: <FileTypeGlyph kind="doc" color="currentColor" />, onSelect: () => selectFile(entry) });
+    }
+    items.push({ kind: 'separator' });
+    items.push({
+      kind: 'item', label: 'Переименовать', icon: <PencilGlyph />, disabled: !(project && isWithin(project.path, entry.path) && entry.path !== project.path), hint: 'Переименовать можно внутри открытого проекта',
+      onSelect: () => {
+        setSelected(entry);
+        setIsSheetOpen(true);
+        setRenameFor(entry.path);
+      },
+    });
+    items.push({ kind: 'item', label: 'Копировать в…', icon: <CopyGlyph />, disabled: !editable, hint: editHint, onSelect: () => setPendingTransfer({ mode: 'copy', entries: [entry] }) });
+    items.push({ kind: 'item', label: 'Переместить в…', icon: <MoveGlyph />, disabled: !editable, hint: editHint, onSelect: () => setPendingTransfer({ mode: 'move', entries: [entry] }) });
+    items.push(isFolder
+      ? { kind: 'item', label: 'Скачать zip', icon: <ZipGlyph />, disabled: !editable, hint: editHint, onSelect: () => void downloadZip([entry]) }
+      : { kind: 'item', label: 'Скачать', icon: <DownloadGlyph size={14} />, onSelect: () => void downloadFile(entry) });
+    items.push({ kind: 'item', label: 'Копировать путь', icon: <CopyGlyph />, onSelect: () => void copyPathOf(entry) });
+    items.push({
+      kind: 'item', label: checked.has(entry.path) ? 'Снять выбор' : 'Выбрать', icon: <SelectGlyph size={14} />,
+      onSelect: () => {
+        setIsSelecting(true);
+        toggleChecked(entry);
+      },
+    });
+    items.push({ kind: 'separator' });
+    items.push({ kind: 'item', label: 'В архив', icon: <ArchiveGlyph size={14} />, danger: true, disabled: !editable, hint: editHint, onSelect: () => void archiveMany([entry]) });
+    return items;
   };
 
   // `names` — what each file is saved as: its own name, or the one given in the conflict window.
@@ -578,6 +843,12 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
       onOpenInChat={openInChat}
       onRename={renameSelected}
       onArchive={() => void archiveSelected()}
+      renameFor={renameFor}
+      onRenameStarted={() => setRenameFor(null)}
+      canTransfer={Boolean(selected && canEditPath(selected.path))}
+      onTransfer={(mode) => selected && setPendingTransfer({ mode, entries: [selected] })}
+      onZip={() => selected && void downloadZip([selected])}
+      isZipping={isZipping}
       focusLine={selected && selected.path === revealTarget ? focusLine : null}
     />
   );
@@ -630,11 +901,19 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
               disabled={!writable}
               title={writable ? undefined : writeHint}
               onClick={() => {
-                setIsNewFolderOpen((open) => !open);
-                setNewFolderName('');
+                if (isNewFolderOpen && newKind === 'directory' && !newTarget) setIsNewFolderOpen(false);
+                else openNewItem('directory');
               }}
             >
               <FolderPlusGlyph />Новая папка
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={!writable}
+              title={writable ? undefined : writeHint}
+              onClick={() => openNewItem('file')}
+            >
+              <FilePlusGlyph />Новый файл
             </Button>
             <Button variant="pri" disabled={!writable || isUploading} title={writable ? undefined : writeHint} onClick={() => uploadRef.current?.click()}>
               <UploadGlyph />{isUploading ? 'Загружаю…' : 'Загрузить'}
@@ -790,12 +1069,51 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
             <button type="button" className="kf-toggle" aria-pressed={showHidden} onClick={() => setShowHidden((value) => !value)}>
               <EyeGlyph />Скрытые
             </button>
+            <button
+              type="button"
+              className="kf-toggle"
+              aria-pressed={isSelecting}
+              title="Отметить несколько файлов и папок. На компьютере — ещё Ctrl/⌘-клик и правая кнопка мыши"
+              onClick={() => (isSelecting ? clearChecked() : setIsSelecting(true))}
+            >
+              <SelectGlyph />Выбрать
+            </button>
           </div>
 
+          {(isSelecting || checked.size > 0) && (
+            <div className="kf-selbar kb-fadein" role="toolbar" aria-label="Действия с выбранным">
+              <span className="kb-m kf-selbar-count">
+                {checkedEntries.length ? `ВЫБРАНО ${checkedEntries.length}` : 'НАЖИМАЙ НА ФАЙЛЫ И ПАПКИ'}
+              </span>
+              <span style={{ flex: 1 }} />
+              {(() => {
+                const allEditable = checkedEntries.length > 0 && checkedEntries.every((entry) => canEditPath(entry.path));
+                const hint = checkedEntries.length ? editHint : 'Сначала отметь файлы';
+                return (
+                  <>
+                    <Button variant="ghost" size="sm" disabled={!allEditable} title={allEditable ? undefined : hint} onClick={() => setPendingTransfer({ mode: 'copy', entries: checkedEntries })}>
+                      <CopyGlyph />Копировать в…
+                    </Button>
+                    <Button variant="ghost" size="sm" disabled={!allEditable} title={allEditable ? undefined : hint} onClick={() => setPendingTransfer({ mode: 'move', entries: checkedEntries })}>
+                      <MoveGlyph />Переместить в…
+                    </Button>
+                    <Button variant="ghost" size="sm" disabled={!allEditable || isZipping} title={allEditable ? undefined : hint} onClick={() => void downloadZip(checkedEntries)}>
+                      <ZipGlyph />{isZipping ? 'Собираю…' : 'Скачать zip'}
+                    </Button>
+                    <Button variant="ghost" size="sm" disabled={!allEditable} title={allEditable ? 'Переносит в ~/.claude/archive — не удаляет' : hint} onClick={() => void archiveMany(checkedEntries)}>
+                      <ArchiveGlyph size={14} />В архив
+                    </Button>
+                  </>
+                );
+              })()}
+              <Button variant="ghost" size="sm" style={{ color: 'var(--kb-soft)' }} onClick={clearChecked}>Готово</Button>
+            </div>
+          )}
+
           {isNewFolderOpen && (
-            <div className="kf-newfolder kb-fadein" role="group" aria-label="Новая папка">
-              <FolderGlyph color="var(--kb-sand)" />
-              <label htmlFor="nf-folder" className="kb-m">{`НОВАЯ ПАПКА В ${basename(currentFolder ?? '')}/`}</label>
+            <div className="kf-newfolder kb-fadein" role="group" aria-label={newKind === 'file' ? 'Новый файл' : 'Новая папка'}>
+              {newKind === 'file' ? <FilePlusGlyph color="var(--kb-sand)" /> : <FolderGlyph color="var(--kb-sand)" />}
+              <label htmlFor="nf-folder" className="kb-m">{`${newKind === 'file' ? 'НОВЫЙ ФАЙЛ' : 'НОВАЯ ПАПКА'} В ${basename(newTarget ?? currentFolder ?? '')}/`}</label>
               <input
                 {...NO_AUTOFILL}
                 autoCorrect="off"
@@ -804,7 +1122,7 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
                 id="nf-folder"
                 type="text"
                 spellCheck={false}
-                placeholder="например, макеты"
+                placeholder={newKind === 'file' ? 'например, заметки.md' : 'например, макеты'}
                 value={newFolderName}
                 autoFocus
                 onChange={(event) => setNewFolderName(event.target.value)}
@@ -847,6 +1165,13 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
               nowMs={nowMs}
               onToggleFolder={toggleFolder}
               onSelectFile={selectFile}
+              checked={checked}
+              isSelecting={isSelecting}
+              onCheck={(entry) => {
+                setIsSelecting(true);
+                toggleChecked(entry);
+              }}
+              onContextMenu={(entry, x, y) => setRowMenu({ entry, x, y })}
               onLoadMore={(folderPath) => void loadMore(folderPath)}
               onRetry={(folderPath) => void loadFolder(folderPath, true)}
             />
@@ -887,6 +1212,34 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
           onCancel={() => setPendingUpload(null)}
         />
       )}
+
+      {rowMenu && (
+        <FilesContextMenu
+          x={rowMenu.x}
+          y={rowMenu.y}
+          title={rowMenu.entry.name}
+          items={menuItems(rowMenu.entry)}
+          onClose={() => setRowMenu(null)}
+        />
+      )}
+
+      {pendingTransfer && (() => {
+        const first = pendingTransfer.entries[0];
+        const owner = first ? ownerOf(first.path) : null;
+        if (!first || !owner) return null;
+        return (
+          <TransferModal
+            mode={pendingTransfer.mode}
+            names={pendingTransfer.entries.map((entry) => entry.name)}
+            projects={projects}
+            startProjectId={owner.projectId}
+            startFolder={parentOf(first.path)}
+            pickedFolders={pendingTransfer.entries.filter((entry) => entry.type === 'directory').map((entry) => entry.path)}
+            onSubmit={transfer}
+            onCancel={() => setPendingTransfer(null)}
+          />
+        );
+      })()}
 
       {isDragging && (
         <div className="kf-drop kb-fadein" aria-hidden="true">

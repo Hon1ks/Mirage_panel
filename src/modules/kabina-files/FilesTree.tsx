@@ -1,3 +1,5 @@
+import type { MouseEvent } from 'react';
+
 import { ChevronGlyph, FileTypeGlyph, FolderGlyph, LockGlyph } from '@/modules/kabina-files/FilesIcons';
 import { formatBytes, formatCount, formatModified, isSecretFile, isWithin, treeIconOf } from '@/modules/kabina-files/utils/fileKinds';
 import { KABINA_FOLDER_PAGE_SIZE } from '@/shared/constants';
@@ -25,6 +27,14 @@ type FilesTreeProps = {
   nowMs: number;
   onToggleFolder: (entry: KabinaFileEntry) => void;
   onSelectFile: (entry: KabinaFileEntry) => void;
+  /** Entries ticked for a batch action (copy, move, zip, archive). */
+  checked: Set<string>;
+  /** «Выбрать» is on: a click ticks a row instead of opening it. */
+  isSelecting: boolean;
+  /** Ticks or unticks a row (a click in «Выбрать», or Ctrl/⌘-click anywhere). */
+  onCheck: (entry: KabinaFileEntry) => void;
+  /** Right-click (a long press on Android): the row's menu at the pointer. */
+  onContextMenu: (entry: KabinaFileEntry, x: number, y: number) => void;
   onLoadMore: (folderPath: string) => void;
   onRetry: (folderPath: string) => void;
 };
@@ -75,6 +85,17 @@ function buildRows(props: FilesTreeProps): { rows: TreeRow[]; objectCount: numbe
 
   walk(props.rootPath, 0);
   return { rows, objectCount };
+}
+
+/** The «Выбрать» tick of a row; the row's own click toggles it. */
+function CheckBox({ checked }: { checked: boolean }) {
+  return (
+    <span className="kf-tick" data-on={checked ? '' : undefined} aria-hidden="true">
+      {checked && (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12l5 5 9-10" /></svg>
+      )}
+    </span>
+  );
 }
 
 function padFor(depth: number): number {
@@ -151,6 +172,22 @@ export default function FilesTree(props: FilesTreeProps) {
           const modified = formatModified(entry.modified, props.nowMs);
           const isFresh = modified.startsWith('сегодня');
 
+          const isChecked = props.checked.has(entry.path);
+          const tick = props.isSelecting ? <CheckBox checked={isChecked} /> : null;
+          // Ctrl/⌘-click ticks without «Выбрать»; in «Выбрать» every click ticks.
+          const onRowClick = (event: MouseEvent<HTMLButtonElement>, open: () => void) => {
+            if (props.isSelecting || event.ctrlKey || event.metaKey) {
+              event.preventDefault();
+              props.onCheck(entry);
+              return;
+            }
+            open();
+          };
+          const onRowMenu = (event: MouseEvent<HTMLButtonElement>) => {
+            event.preventDefault();
+            props.onContextMenu(entry, event.clientX, event.clientY);
+          };
+
           if (entry.type === 'directory') {
             const hasChanges = folderHasChanges(entry.path);
             return (
@@ -163,13 +200,17 @@ export default function FilesTree(props: FilesTreeProps) {
                 aria-selected={isSelected}
                 data-path={entry.path}
                 data-muted={isMuted ? '' : undefined}
+                data-checked={isChecked ? '' : undefined}
                 style={{ paddingLeft: padFor(depth) }}
-                onClick={() => props.onToggleFolder(entry)}
+                onClick={(event) => onRowClick(event, () => props.onToggleFolder(entry))}
+                onContextMenu={onRowMenu}
               >
+                {tick}
                 <ChevronGlyph />
                 <FolderGlyph color={iconColor} />
                 <span className="kf-row-name">
                   <span className="kf-row-label">{entry.name}</span>
+                  {isChecked && <span className="kb-sr">выбрано</span>}
                   {entry.childCount !== null && <span className="kb-m kf-row-count">{formatCount(entry.childCount)}</span>}
                   {hasChanges && (
                     <>
@@ -194,13 +235,17 @@ export default function FilesTree(props: FilesTreeProps) {
               aria-selected={isSelected}
               data-path={entry.path}
               data-muted={isMuted ? '' : undefined}
+              data-checked={isChecked ? '' : undefined}
               style={{ paddingLeft: padFor(depth) }}
-              onClick={() => props.onSelectFile(entry)}
+              onClick={(event) => onRowClick(event, () => props.onSelectFile(entry))}
+              onContextMenu={onRowMenu}
             >
+              {tick}
               <span aria-hidden="true" style={{ width: 12, flex: 'none' }} />
               <FileTypeGlyph kind={treeIconOf(entry.name)} color={iconColor} />
               <span className="kf-row-name">
                 <span className="kf-row-label">{entry.name}</span>
+                {isChecked && <span className="kb-sr">выбрано</span>}
                 {isChanged && (
                   <>
                     <span className="kb-m kf-m-badge" aria-hidden="true">M</span>

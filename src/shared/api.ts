@@ -474,6 +474,12 @@ export const api = {
       post(`/api/kabina-files/projects/${encodeURIComponent(projectId)}/archive`, { path: targetPath }),
     restore: (projectId: string, archivedPath: string, originalPath: string) =>
       post(`/api/kabina-files/projects/${encodeURIComponent(projectId)}/restore`, { archivedPath, originalPath }),
+    // «Копировать в…» / «Переместить в…»: picked entries of a project into a folder of the same or another project.
+    transfer: (projectId: string, body: { paths: string[]; toProjectId: string; toFolder: string; mode: 'copy' | 'move' }) =>
+      post(`/api/kabina-files/projects/${encodeURIComponent(projectId)}/transfer`, body),
+    // «Скачать zip»: the answer is the archive itself (or a JSON error).
+    zip: (projectId: string, paths: string[]) =>
+      post(`/api/kabina-files/projects/${encodeURIComponent(projectId)}/zip`, { paths }),
     // Same endpoint as the authors' tree; FormData keeps the multipart content type.
     upload: (projectId: string, formData: FormData) =>
       authenticatedFetch(`/api/file-tree/projects/${encodeURIComponent(projectId)}/files/upload`, { method: 'POST', body: formData }),

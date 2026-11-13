@@ -48,6 +48,43 @@ router.post(
   }),
 );
 
+// «Копировать в…» / «Переместить в…»: { paths, toProjectId, toFolder, mode: copy|move }.
+router.post(
+  '/projects/:projectId/transfer',
+  asyncHandler(async (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    if (body.mode !== 'copy' && body.mode !== 'move') {
+      throw new AppError('mode must be copy or move', { code: 'KABINA_FILES_FIELD_REQUIRED', statusCode: 400 });
+    }
+    const result = await kabinaFilesService.transferEntries({
+      projectId: readString(req.params.projectId, 'projectId'),
+      paths: body.paths,
+      toProjectId: readString(body.toProjectId, 'toProjectId'),
+      toFolder: readString(body.toFolder, 'toFolder'),
+      mode: body.mode,
+    });
+    res.json(createApiSuccessResponse(result));
+  }),
+);
+
+// «Скачать zip»: { paths } of the project → one archive; X-Kabina-Skipped tells how many were left out.
+router.post(
+  '/projects/:projectId/zip',
+  asyncHandler(async (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const { fileName, skipped, zip } = await kabinaFilesService.zipEntries({
+      projectId: readString(req.params.projectId, 'projectId'),
+      paths: body.paths,
+    });
+    const archive = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="archive.zip"; filename*=UTF-8''${encodeURIComponent(fileName)}`);
+    res.setHeader('X-Kabina-Skipped', String(skipped));
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, X-Kabina-Skipped');
+    res.send(archive);
+  }),
+);
+
 // «Вернуть»: { archivedPath, originalPath } → moved back if the place is free.
 router.post(
   '/projects/:projectId/restore',
