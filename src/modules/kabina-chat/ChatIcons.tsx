@@ -33,6 +33,10 @@ export const GitIcon = (p: IconProps) => (
 export const TerminalIcon = (p: IconProps) => (
   <Stroke {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9l3 3-3 3M13 15h4" /></Stroke>
 );
+/** «Классика»: two panes, the authors' interface with the file tree beside the chat. */
+export const ClassicIcon = (p: IconProps) => (
+  <Stroke {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M5.5 8h1.5M5.5 11h1.5M5.5 14h1.5" /></Stroke>
+);
 export const CalIcon = (p: IconProps) => (
   <Stroke {...p}><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></Stroke>
 );

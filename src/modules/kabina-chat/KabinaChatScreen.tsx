@@ -151,6 +151,8 @@ export default function KabinaChatScreen(props: KabinaChatScreenProps) {
     dialogKey: `${project.projectId}:${newSessionTrigger}`,
   });
   const sessionId = chat.activeSessionId;
+  // «Классика»: this dialog in the authors' interface, where the file tree works as in CloudCLI.
+  const classicPath = sessionId ? `/classic/session/${encodeURIComponent(sessionId)}` : '/classic';
   const isProcessing = sessionState.isProcessing;
   const pendingRequests = provider.pendingPermissionRequests;
   // A message the voice overlay sent into this dialog shows at once, like a composer send.
@@ -801,6 +803,13 @@ export default function KabinaChatScreen(props: KabinaChatScreenProps) {
                   </button>
                   {isPhoneModelOpen && <ModelMenu chat={chat} inline onClose={() => setIsPhoneModelOpen(false)} />}
                 </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <h3 className="kbc-h kb-m">КЛАССИКА</h3>
+                  <Link className="kbc-pmodel" to={classicPath}>
+                    <span style={{ fontSize: 15, fontWeight: 500 }}>Открыть как в CloudCLI</span>
+                    <span className="kb-m" style={{ flex: 1, fontSize: 11, color: 'var(--kb-mute)' }}>этот диалог · файлы, загрузка в папку</span>
+                  </Link>
+                </div>
               </>
             )}
           />
@@ -864,6 +873,7 @@ export default function KabinaChatScreen(props: KabinaChatScreenProps) {
         openFrom={dialogsFrom === 'project' || dialogsFrom === 'dialog' ? dialogsFrom : null}
         onOpenFrom={setDialogsFrom}
         onCloseDialogs={closeDialogs}
+        classicPath={classicPath}
       />
 
       {!isChatTab && (

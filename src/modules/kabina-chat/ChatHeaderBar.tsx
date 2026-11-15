@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 
 import { HudPopover, useClaimKabinaCrumbs, useKabinaHeaderSlot } from '@/modules/kabina';
-import { CalIcon, ChatTabIcon, ChevronDown, FolderIcon, TerminalIcon } from '@/modules/kabina-chat/ChatIcons';
+import { CalIcon, ChatTabIcon, ChevronDown, ClassicIcon, FolderIcon, TerminalIcon } from '@/modules/kabina-chat/ChatIcons';
 import type { AppTab } from '@/shared/types';
 
 /**
@@ -30,6 +30,8 @@ type ChatHeaderBarProps = {
   openFrom: 'project' | 'dialog' | null;
   onOpenFrom: (from: 'project' | 'dialog') => void;
   onCloseDialogs: () => void;
+  /** «Классика»: this dialog in the authors' interface (the CloudCLI file tree with upload, delete, download). */
+  classicPath: string;
 };
 
 /**
@@ -39,7 +41,7 @@ type ChatHeaderBarProps = {
  * and the project tabs. The shell drops its own static crumb while this is mounted.
  * Nothing outside the shell (tests, the classic interface).
  */
-export default function ChatHeaderBar({ projectName, title, activeTab, onTab, dialogs, openFrom, onOpenFrom, onCloseDialogs }: ChatHeaderBarProps) {
+export default function ChatHeaderBar({ projectName, title, activeTab, onTab, dialogs, openFrom, onOpenFrom, onCloseDialogs, classicPath }: ChatHeaderBarProps) {
   const slot = useKabinaHeaderSlot();
   const crumbsRef = useRef<HTMLDivElement>(null);
   useClaimKabinaCrumbs();
@@ -108,6 +110,10 @@ export default function ChatHeaderBar({ projectName, title, activeTab, onTab, di
             </button>
           )
         ))}
+        <Link className="kbc-htab" to={classicPath} title="Этот диалог в классическом интерфейсе — файлы как в CloudCLI">
+          <ClassicIcon size={14} />
+          <span className="kbc-htab-label">Классика</span>
+        </Link>
       </nav>
     </>,
     slot,
