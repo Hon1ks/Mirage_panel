@@ -70,6 +70,9 @@ Mirage проверяется прежде всего с Claude Code.
 
 ## Установка
 
+> **На свой сервер (VPS) одной командой** — скриптами из `scripts/server/`: пошаговая инструкция
+> в [docs/INSTALL-SERVER.md](docs/INSTALL-SERVER.md). Ниже — ручная установка.
+
 ```bash
 git clone https://github.com/victorglazunoff/mirage-cloud-panel.git
 cd mirage-cloud-panel
