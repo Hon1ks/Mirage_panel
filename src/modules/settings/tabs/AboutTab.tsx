@@ -15,7 +15,7 @@ import {
 import { useVersionCheck } from '@/shared/hooks/useVersionCheck';
 import { MirageLogo } from '@/shared/ui';
 
-/** Repository path shown under the "Source code" link, e.g. `victorglazunoff/mirage-cloud-panel`. */
+/** Repository path shown under the "Source code" link, e.g. `Hon1ks/Mirage_panel`. */
 const REPOSITORY_LABEL = `${REPOSITORY_OWNER}/${REPOSITORY_NAME}`;
 
 function GitHubIcon({ className }: { className?: string }) {

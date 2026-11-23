@@ -77,7 +77,7 @@ test('a copy without .git runs nothing and points to the releases', async () => 
 
   assert.deepEqual(calls, []);
   assert.equal(result.success, false);
-  assert.match(String((result as { error?: string }).error), /github\.com\/victorglazunoff\/mirage-cloud-panel\/releases/);
+  assert.match(String((result as { error?: string }).error), /github\.com\/Hon1ks\/Mirage_panel\/releases/);
 });
 
 test('platform installations use the platform workflow regardless of install mode', async () => {

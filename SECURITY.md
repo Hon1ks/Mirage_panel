@@ -3,7 +3,7 @@
 ## Как сообщить об уязвимости
 
 Пожалуйста, **не открывайте публичный issue** про уязвимость. Сообщите приватно через
-[GitHub Security Advisories](https://github.com/victorglazunoff/mirage-cloud-panel/security/advisories/new)
+[GitHub Security Advisories](https://github.com/Hon1ks/Mirage_panel/security/advisories/new)
 этого репозитория (вкладка **Security → Report a vulnerability**).
 
 Опишите:
@@ -35,6 +35,6 @@
 ---
 
 **English.** Please do not open public issues for security problems. Report them privately via
-[GitHub Security Advisories](https://github.com/victorglazunoff/mirage-cloud-panel/security/advisories/new)
+[GitHub Security Advisories](https://github.com/Hon1ks/Mirage_panel/security/advisories/new)
 (Security → Report a vulnerability) with the version, the setup and steps to reproduce. We aim to reply within a week.
 Only the latest release receives fixes.

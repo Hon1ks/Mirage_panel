@@ -7,8 +7,8 @@ specific to this fork are often better proposed upstream as well.
 
 ## Before You Start
 
-- **Search first.** Check [existing issues](https://github.com/victorglazunoff/mirage-cloud-panel/issues) and [pull requests](https://github.com/victorglazunoff/mirage-cloud-panel/pulls) to avoid duplicating work.
-- **Discuss first** for new features. Open an [issue](https://github.com/victorglazunoff/mirage-cloud-panel/issues/new) to discuss your idea before investing time in implementation. We may already have plans or opinions on how it should work.
+- **Search first.** Check [existing issues](https://github.com/Hon1ks/Mirage_panel/issues) and [pull requests](https://github.com/Hon1ks/Mirage_panel/pulls) to avoid duplicating work.
+- **Discuss first** for new features. Open an [issue](https://github.com/Hon1ks/Mirage_panel/issues/new) to discuss your idea before investing time in implementation. We may already have plans or opinions on how it should work.
 - **Bug fixes are always welcome.** If you spot a bug, feel free to open a PR directly.
 
 ## Prerequisites
@@ -21,8 +21,8 @@ specific to this fork are often better proposed upstream as well.
 1. Fork the repository
 2. Clone your fork:
    ```bash
-   git clone https://github.com/<your-username>/mirage-cloud-panel.git
-   cd mirage-cloud-panel
+   git clone https://github.com/<your-username>/Mirage_panel.git
+   cd Mirage_panel
    ```
 3. Install dependencies:
    ```bash
@@ -40,7 +40,7 @@ specific to this fork are often better proposed upstream as well.
 ## Project Structure
 
 ```
-mirage-cloud-panel/
+Mirage_panel/
 ├── src/              # React frontend (Vite + Tailwind)
 │   ├── components/   # UI components
 │   ├── contexts/     # React context providers

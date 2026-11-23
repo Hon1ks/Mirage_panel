@@ -5,16 +5,20 @@
   Чаты с агентом из браузера и с телефона: вклиниться в идущий ход, остановить, посмотреть агентов, файлы, календарь.</p>
 </div>
 
-> **Изменённая версия [CloudCLI UI](https://github.com/siteboon/claudecodeui).**
-> Mirage Cloud Panel основана на «CloudCLI UI (https://github.com/siteboon/claudecodeui)» и существенно переработана.
-> Это не оригинальный CloudCLI UI и не продукт Siteboon AI B.V. — подробности в [NOTICE](NOTICE) и [лицензии](#лицензия).
+> **Изменённая версия [Mirage Cloud Panel](https://github.com/victorglazunoff/mirage-cloud-panel)**, которая сама —
+> изменённая версия [CloudCLI UI](https://github.com/siteboon/claudecodeui). Mirage Cloud Panel основана на
+> «CloudCLI UI (https://github.com/siteboon/claudecodeui)» и существенно переработана. Это не оригинальный CloudCLI UI
+> и не продукт Siteboon AI B.V. Что изменено в этой копии — [ниже](#что-изменено-в-этой-версии), подробности — в
+> [NOTICE](NOTICE) и [лицензии](#лицензия).
 
 **English.** Russian-only UI for now. Mirage Cloud Panel is a self-hosted web panel for
 [Claude Code](https://docs.anthropic.com/en/docs/claude-code): chat with the agent from any browser or phone, steer a
 running turn, stop it, watch background agents, browse files, plan with a calendar, dictate by voice and get Telegram
-notifications. It is a modified version of CloudCLI UI (https://github.com/siteboon/claudecodeui), licensed under
-AGPL-3.0-or-later with the additional terms in [LICENSE](LICENSE). Install from source (see below); the package is
-not published to npm.
+notifications. This repository is a modified version of
+[Mirage Cloud Panel](https://github.com/victorglazunoff/mirage-cloud-panel), itself a modified version of CloudCLI UI
+(https://github.com/siteboon/claudecodeui), licensed under AGPL-3.0-or-later with the additional terms in
+[LICENSE](LICENSE). One-command server install: [docs/INSTALL-SERVER.md](docs/INSTALL-SERVER.md); the package is not
+published to npm.
 
 ---
 
@@ -47,17 +51,40 @@ not published to npm.
   поставить его в очередь на после хода. **Стоп** обрывает ход, ничего не закрывается случайно.
 - **Агенты** — дерево субагентов и фоновых задач, кто сейчас работает и кто ждёт вашего решения.
 - **Права** — Default / Auto / Plan / «Принимать правки» / Bypass, запросы разрешений прямо в чате.
-- **Файлы** — дерево проекта, превью кода и Markdown, загрузка и скачивание, «спросить Claude про файл».
+- **Файлы** — дерево проекта, превью кода и Markdown, загрузка и скачивание, новый файл и папка, копирование и
+  перенос между проектами, выбор нескольких, скачивание папки zip-архивом, меню по правой кнопке, «спросить Claude
+  про файл».
 - **Календарь** — звонки, встречи и отложенные сообщения Claude («каждый день в 9 — сводка по проекту»),
   быстрое добавление обычной фразой; по желанию — синхронизация с Google Calendar.
 - **Голос** — удерживаете ⌥ Пробел или кнопку и говорите; распознавание через Yandex SpeechKit или
   OpenAI-совместимый сервер (Whisper).
 - **Уведомления** — в браузере и в Telegram: нужно решение, ход закончен, фоновая работа завершилась.
 - **Вход** — один владелец, двухфакторная защита (TOTP), список входов, пауза после неудачных попыток.
-- Терминал, артефакты Claude, поиск по всему (⌘K), установка как приложение (PWA) на телефон.
+- **Лимиты и сервер** — счётчики подписки (5 часов, неделя, по моделям) и виджет сервера: нагрузка, память, диск,
+  службы.
+- Терминал, артефакты Claude, поиск по всему (⌘K), установка как приложение (PWA) на телефон, классический интерфейс
+  CloudCLI внутри панели («Классика»).
 
 Интерфейс «Кабина» — только на русском. Поддержка Codex, Cursor CLI и OpenCode досталась от оригинала;
 Mirage проверяется прежде всего с Claude Code.
+
+## Что изменено в этой версии
+
+По сравнению с [исходной Mirage Cloud Panel](https://github.com/victorglazunoff/mirage-cloud-panel):
+
+- **Безопасность** (по итогам независимого ревью): доступ к файлам не выходит из проекта через символические ссылки;
+  ключи, пароли и база панели не отдаются никогда; входы без идентификатора сессии не принимаются; кнопка
+  «Обновить» в панели выключена по умолчанию (обновление — только с сервера); превью SVG очищается; заголовки
+  безопасности; защита от подбора пароля с IPv6; текст событий календаря передаётся Claude как данные, не как команды.
+- **Файлы** — меню по правой кнопке, новый файл, копирование и перенос (в том числе между проектами), выбор
+  нескольких, скачивание zip; «Классика» — этот же диалог в классическом интерфейсе CloudCLI.
+- **Чат** — у каждого ответа видно, какая модель его написала; мысли Claude между шагами — свёрнутыми строками
+  (включаются в Настройки → Claude); выбранная модель видна сразу, а не после ответа.
+- **Главный экран** — виджет «Сервер», лимит 5-часовой сессии, недельные лимиты по моделям.
+- **Telegram** — подтверждения действительно доходят (раньше истекали раньше, чем отправлялись), секреты в сообщениях
+  скрываются; часовой пояс панели — в настройках.
+- **Установка на сервер одной командой** — скрипты [`scripts/server/`](scripts/server) и
+  [инструкция](docs/INSTALL-SERVER.md).
 
 ## Требования
 
@@ -70,12 +97,24 @@ Mirage проверяется прежде всего с Claude Code.
 
 ## Установка
 
-> **На свой сервер (VPS) одной командой** — скриптами из `scripts/server/`: пошаговая инструкция
-> в [docs/INSTALL-SERVER.md](docs/INSTALL-SERVER.md). Ниже — ручная установка.
+### На сервер одной командой (рекомендуется)
+
+Ubuntu 22.04 / 24.04 или Debian 12:
 
 ```bash
-git clone https://github.com/victorglazunoff/mirage-cloud-panel.git
-cd mirage-cloud-panel
+curl -fsSL https://raw.githubusercontent.com/Hon1ks/Mirage_panel/main/scripts/server/install.sh -o install.sh
+sudo bash install.sh --tz Europe/Moscow
+```
+
+Скрипт ставит Node.js 22 и Claude Code, создаёт пользователя `mirage`, собирает панель и заводит службу systemd.
+Дальше — вход в Claude, регистрация через SSH-туннель и HTTPS одной командой: пошагово в
+**[docs/INSTALL-SERVER.md](docs/INSTALL-SERVER.md)**.
+
+### Вручную
+
+```bash
+git clone https://github.com/Hon1ks/Mirage_panel.git mirage-panel
+cd mirage-panel
 npm ci --include=dev     # dev-зависимости нужны для сборки, даже если NODE_ENV=production
 npm run build
 npm run server           # http://127.0.0.1:3001
@@ -173,10 +212,12 @@ server {
 подтверждений) — панель тогда выключает кнопку и объясняет почему. Обойти можно только признаком песочницы
 (`IS_SANDBOX=1`), и делать это стоит лишь в настоящей изоляции (контейнер, отдельная VM).
 
+Скрипт `scripts/server/install.sh` делает всё это сам; ниже — то же вручную.
+
 ```bash
 sudo useradd --create-home --shell /bin/bash mirage
 sudo -iu mirage
-git clone https://github.com/victorglazunoff/mirage-cloud-panel.git && cd mirage-cloud-panel
+git clone https://github.com/Hon1ks/Mirage_panel.git mirage-panel && cd mirage-panel
 npm ci --include=dev && npm run build
 claude          # войти в Claude Code под этим пользователем: /login
 ```
@@ -191,7 +232,7 @@ Wants=network-online.target
 
 [Service]
 User=mirage
-WorkingDirectory=/home/mirage/mirage-cloud-panel
+WorkingDirectory=/home/mirage/mirage-panel
 Environment=NODE_ENV=production
 ExecStart=/usr/bin/npm run server
 Restart=on-failure
@@ -289,15 +330,26 @@ journalctl -u mirage -f
 
 ## Обновление
 
+Если ставили скриптом:
+
 ```bash
-cd mirage-cloud-panel
+sudo bash /home/mirage/mirage-panel/scripts/server/update.sh
+```
+
+Скрипт берёт новые коммиты, собирает и перезапускает панель; если сборка не удалась — возвращает прежнюю версию.
+
+Вручную, в папке панели:
+
+```bash
 git pull --ff-only && npm ci --include=dev && npm run build
 sudo systemctl restart mirage
 ```
 
-`mirage update` проверяет [релизы на GitHub](https://github.com/victorglazunoff/mirage-cloud-panel/releases)
-и напоминает эти команды. База и настройки живут вне папки панели (`~/.mirage`, `.env`) и обновлением не трогаются;
-перед крупным обновлением сделайте копию `~/.mirage/auth.db`.
+Кнопка «Обновить» внутри панели **выключена по умолчанию**: обновление тянет и запускает код из интернета с правами
+панели, поэтому — только с сервера. Включить кнопку можно `MIRAGE_ALLOW_UI_UPDATE=1` в `.env`.
+
+База и настройки живут вне папки панели (`~/.mirage`, `.env`) и обновлением не трогаются; перед крупным обновлением
+сделайте копию `~/.mirage/auth.db`.
 
 ## Переход с CloudCLI UI
 
@@ -340,8 +392,9 @@ npm run typecheck
 
 [GNU AGPL-3.0-or-later](LICENSE) с дополнительными условиями по разделу 7 (в конце `LICENSE`), см. также [NOTICE](NOTICE).
 
-Mirage Cloud Panel — **изменённая версия** «CloudCLI UI (https://github.com/siteboon/claudecodeui)»,
-© Siteboon AI B.V. и участники. Имена CloudCLI и Siteboon используются только для указания происхождения;
+Этот репозиторий — **изменённая версия** [Mirage Cloud Panel](https://github.com/victorglazunoff/mirage-cloud-panel)
+(изменения — ноябрь 2026, список — в [NOTICE](NOTICE)). Mirage Cloud Panel — **изменённая версия**
+«CloudCLI UI (https://github.com/siteboon/claudecodeui)», © Siteboon AI B.V. и участники. Имена CloudCLI и Siteboon используются только для указания происхождения;
 проект не связан с Siteboon AI B.V. и не одобрен ею.
 
 Если вы запускаете изменённую панель для других людей по сети, AGPL требует дать им исходный код этой версии —

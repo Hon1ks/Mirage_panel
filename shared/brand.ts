@@ -24,10 +24,10 @@ export const PACKAGE_NAME = 'mirage-cloud-panel';
 export const CLI_COMMAND = 'mirage';
 
 /** GitHub owner of the public repository; also used for the release (update) check. */
-export const REPOSITORY_OWNER = 'victorglazunoff';
+export const REPOSITORY_OWNER = 'Hon1ks';
 
 /** GitHub name of the public repository; also used for the release (update) check. */
-export const REPOSITORY_NAME = 'mirage-cloud-panel';
+export const REPOSITORY_NAME = 'Mirage_panel';
 
 /** Public source repository — the AGPL-3.0 §13 "source of the running version" link. */
 export const REPOSITORY_URL = `https://github.com/${REPOSITORY_OWNER}/${REPOSITORY_NAME}`;

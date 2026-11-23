@@ -24,13 +24,13 @@
     "!**/*.test.*",
     "!**/test-database.setup.*"
   ],
-  "homepage": "https://github.com/victorglazunoff/mirage-cloud-panel#readme",
+  "homepage": "https://github.com/Hon1ks/Mirage_panel#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/victorglazunoff/mirage-cloud-panel.git"
+    "url": "git+https://github.com/Hon1ks/Mirage_panel.git"
   },
   "bugs": {
-    "url": "https://github.com/victorglazunoff/mirage-cloud-panel/issues"
+    "url": "https://github.com/Hon1ks/Mirage_panel/issues"
   },
   "scripts": {
     "dev": "concurrently --kill-others \"npm run server:dev\" \"npm run client\"",

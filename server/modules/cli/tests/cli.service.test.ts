@@ -128,6 +128,6 @@ test('update only explains the git update and links the releases (the package is
   const printed = harness.logMessages.join('\n');
   assert.match(printed, /latest version \(1\.2\.3\)/);
   assert.match(printed, /git pull --ff-only && npm ci && npm run build/);
-  assert.match(printed, /github\.com\/victorglazunoff\/mirage-cloud-panel\/releases/);
+  assert.match(printed, /github\.com\/Hon1ks\/Mirage_panel\/releases/);
   assert.doesNotMatch(printed, /npm (install|update) -g/);
 });

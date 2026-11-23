@@ -41,3 +41,27 @@ License v3.0 or later, including the additional terms under Section 7
 
 The names "CloudCLI", "CloudCLI UI" and "Siteboon" are used only to describe
 the origin of this work, as the additional terms allow.
+
+=========================================================================
+
+This copy (https://github.com/Hon1ks/Mirage_panel)
+Copyright 2026 Hon1ks
+
+This repository is a MODIFIED VERSION of Mirage Cloud Panel
+(https://github.com/victorglazunoff/mirage-cloud-panel), which is itself a
+modified version of CloudCLI UI (see above). Modified in November 2026,
+distributed under the same AGPL-3.0-or-later with the same additional terms.
+The modifications include, among others:
+
+  - security fixes from an independent review: file access confined to the
+    project through symlinks, private files (keys, credentials, the panel
+    database) never served, sign-ins without a session id refused, the
+    in-panel "update" button off by default, sanitized SVG previews,
+    security headers, IPv6 throttling, calendar text marked as data;
+  - a home «Сервер» widget, the 5-hour session limit, per-model weekly limits;
+  - a panel time zone setting, Telegram approvals that actually arrive,
+    masked secrets in Telegram messages, local fonts;
+  - files: right-click menu, new file, copy/move between projects,
+    multi-select, zip download; «Классика» link to the authors' interface;
+  - chat: the model shown on every reply, Claude's thoughts as folded lines;
+  - server install, HTTPS and update scripts (scripts/server/).
