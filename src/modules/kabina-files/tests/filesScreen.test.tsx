@@ -321,3 +321,37 @@ test('Ctrl-click ticks rows; «Переместить в…» sends them to the 
   assert.ok(screen.getByText('Перенесено 2 объекта в docs/'));
   assert.equal(screen.queryByRole('toolbar', { name: 'Действия с выбранным' }), null, 'the selection is cleared');
 });
+
+test('a download shows its progress at the bottom; «Отмена» stops it', async () => {
+  await renderFiles();
+  let pushRest: (() => void) | null = null;
+  apiMock.readFileBlob.mockImplementation(async (_projectId: string, _path: string, options: { signal?: AbortSignal } = {}) => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(600));
+        pushRest = () => controller.enqueue(new Uint8Array(600));
+        options.signal?.addEventListener('abort', () => controller.error(new DOMException('cancelled', 'AbortError')));
+      },
+    });
+    return new Response(body, { status: 200 });
+  });
+  const createUrl = vi.fn(() => 'blob:x');
+  const originalCreate = URL.createObjectURL;
+  URL.createObjectURL = createUrl;
+  try {
+    fireEvent.contextMenu(screen.getByRole('treeitem', { name: /deploy\.sh/ }), { clientX: 10, clientY: 10 });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Скачать' }));
+    await flush(200);
+    const bar = screen.getByRole('progressbar', { name: 'Скачивание deploy.sh' });
+    assert.equal(bar.getAttribute('aria-valuenow'), '50', 'half of the 1200 bytes the tree knows about');
+    assert.ok(screen.getByText(/50 % · 600 Б из 1,2 КБ/));
+    pushRest?.();
+    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+    await flush();
+    assert.equal(screen.queryByRole('progressbar'), null, 'the plate goes away');
+    assert.equal(createUrl.mock.calls.length, 0, 'nothing is saved');
+    assert.ok(screen.getByText('Скачивание deploy.sh отменено'));
+  } finally {
+    URL.createObjectURL = originalCreate;
+  }
+});

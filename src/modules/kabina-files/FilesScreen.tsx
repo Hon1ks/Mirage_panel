@@ -31,6 +31,9 @@ import { UploadConflictModal } from '@/modules/kabina-files/UploadConflictModal'
 import { useFolderPages } from '@/modules/kabina-files/hooks/useFolderPages';
 import { usePhoneLayout } from '@/modules/kabina-files/hooks/usePhoneLayout';
 import { filesErrorText } from '@/modules/kabina-files/utils/filesErrors';
+import { expectedSize, isAbort, readWithProgress, saveBlob } from '@/modules/kabina-files/utils/downloads';
+import type { DownloadProgress } from '@/modules/kabina-files/utils/downloads';
+import { DownloadPlate } from '@/modules/kabina-files/DownloadPlate';
 import { commonProjectsFolder, extensionTag, folderOfSelection, foldersToReveal, formatModified, isWithin, resolveRevealPath } from '@/modules/kabina-files/utils/fileKinds';
 import { api, readApiJson } from '@/shared/api';
 import { writeDraftText } from '@/shared/chatDrafts';
@@ -59,18 +62,6 @@ type PendingTransfer = { mode: 'copy' | 'move'; entries: KabinaFileEntry[] };
 
 /** The right-click menu of a tree row. */
 type RowMenu = { entry: KabinaFileEntry; x: number; y: number };
-
-/** Saves a blob under `name` through a temporary link (the browser's own download). */
-function saveBlob(blob: Blob, name: string): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 
 /** The archive's name from `Content-Disposition` (`filename*=UTF-8''…`), else `fallback`. */
 function readDownloadName(response: Response, fallback: string): string {
@@ -181,6 +172,8 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
   const [renameFor, setRenameFor] = useState<string | null>(null);
   // A zip being built on the server, for the buttons' label.
   const [isZipping, setIsZipping] = useState(false);
+  // The download in flight (file or zip): the plate at the bottom shows its progress and «Отмена».
+  const [download, setDownload] = useState<DownloadProgress | null>(null);
   // The line above the tree: archived (with «Вернуть»), done, or an error.
   const [note, setNote] = useState<Note | null>(null);
   // Branch and changed files of the open project; null outside a repository.
@@ -549,21 +542,32 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
       return;
     }
     setIsZipping(true);
+    const controller = new AbortController();
     try {
       for (const [projectId, group] of groups) {
-        const response = await api.kabinaFiles.zip(projectId, group.map((entry) => entry.path));
+        const fallbackName = group.length === 1 ? `${group[0].name}.zip` : 'файлы.zip';
+        // The server packs the whole archive before the first byte: «Собираю архив…» until then.
+        setDownload({ name: fallbackName, phase: 'preparing', loaded: 0, total: null, cancel: () => controller.abort() });
+        const response = await api.kabinaFiles.zip(projectId, group.map((entry) => entry.path), { signal: controller.signal });
         // An error answer is JSON: readApiJson turns it into the server's reason.
         if (!response.ok) await readApiJson(response);
         const skipped = Number(response.headers.get('X-Kabina-Skipped') ?? 0);
-        saveBlob(await response.blob(), readDownloadName(response, group.length === 1 ? `${group[0].name}.zip` : 'файлы.zip'));
+        const name = readDownloadName(response, fallbackName);
+        const blob = await readWithProgress(response, expectedSize(response, null), (loaded, total) => {
+          setDownload({ name, phase: 'loading', loaded, total, cancel: () => controller.abort() });
+        });
+        saveBlob(blob, name);
         if (skipped > 0) {
           setNote({ kind: 'ok', text: `Архив скачан; пропущено ${skipped}: ссылки и секреты (ключи, .env, базы панели) в архив не кладутся` });
         }
       }
     } catch (error) {
-      setNote({ kind: 'error', text: `Архив не собран: ${filesErrorText(error, 'ошибка на сервере')}` });
+      setNote(isAbort(error)
+        ? { kind: 'ok', text: 'Скачивание архива отменено' }
+        : { kind: 'error', text: `Архив не собран: ${filesErrorText(error, 'ошибка на сервере')}` });
     } finally {
       setIsZipping(false);
+      setDownload(null);
     }
   };
 
@@ -571,12 +575,23 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
     const owner = ownerOf(entry.path);
     const readId = owner?.projectId ?? readProjectId;
     if (!readId) return;
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    setDownload({ name: entry.name, phase: 'loading', loaded: 0, total: entry.size || null, cancel });
     try {
-      const response = await api.readFileBlob(readId, entry.path);
+      const response = await api.readFileBlob(readId, entry.path, { signal: controller.signal });
       if (!response.ok) await readApiJson(response);
-      saveBlob(await response.blob(), entry.name);
+      // The server streams without a length: the tree's size of the file stands in for it.
+      const blob = await readWithProgress(response, expectedSize(response, entry.size), (loaded, total) => {
+        setDownload({ name: entry.name, phase: 'loading', loaded, total, cancel });
+      });
+      saveBlob(blob, entry.name);
     } catch (error) {
-      setNote({ kind: 'error', text: `Не скачалось: ${filesErrorText(error, 'ошибка на сервере')}` });
+      setNote(isAbort(error)
+        ? { kind: 'ok', text: `Скачивание ${entry.name} отменено` }
+        : { kind: 'error', text: `Не скачалось: ${filesErrorText(error, 'ошибка на сервере')}` });
+    } finally {
+      setDownload(null);
     }
   };
 
@@ -849,6 +864,7 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
       onTransfer={(mode) => selected && setPendingTransfer({ mode, entries: [selected] })}
       onZip={() => selected && void downloadZip([selected])}
       isZipping={isZipping}
+      onDownloadProgress={setDownload}
       focusLine={selected && selected.path === revealTarget ? focusLine : null}
     />
   );
@@ -1212,6 +1228,8 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
           onCancel={() => setPendingUpload(null)}
         />
       )}
+
+      {download && <DownloadPlate download={download} />}
 
       {rowMenu && (
         <FilesContextMenu

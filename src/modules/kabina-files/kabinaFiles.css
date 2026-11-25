@@ -1649,3 +1649,96 @@
     min-height: 44px;
   }
 }
+
+/* Скачивание: плашка внизу экрана — имя, полоса, процент, «Отмена» */
+
+.kf-dl {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 900;
+  transform: translateX(-50%);
+  width: min(460px, calc(100vw - 24px));
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px 10px 14px;
+  background: var(--kb-panel);
+  border: 1px solid rgba(255, 106, 43, 0.4);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+.kf-dl-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.kf-dl-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.kf-dl-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  color: var(--kb-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kf-dl-detail {
+  flex: none;
+  font-size: 11px;
+  color: var(--kb-soft);
+}
+
+.kf-dl-bar {
+  position: relative;
+  height: 5px;
+  background: rgba(255, 236, 210, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.kf-dl-bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--kb-signal);
+  border-radius: 3px;
+  transition: width 0.15s linear;
+}
+
+/* Размер неизвестен или сервер собирает архив: бегущий отрезок вместо процента */
+.kf-dl-bar[data-indeterminate] > span {
+  width: 30%;
+  animation: kf-dl-run 1.2s ease-in-out infinite;
+}
+
+@keyframes kf-dl-run {
+  from { left: -30%; }
+  to { left: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kf-dl-bar[data-indeterminate] > span {
+    animation: none;
+    width: 100%;
+    opacity: 0.45;
+  }
+}
+
+/* Телефон: над нижней панелью навигации */
+@media (max-width: 720px) {
+  .kf-dl {
+    bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+  }
+}

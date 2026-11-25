@@ -33,6 +33,8 @@ import type { PreviewKind } from '@/modules/kabina-files/utils/fileKinds';
 import { readSheetPreview } from '@/modules/kabina-files/utils/xlsxPreview';
 import type { SheetPreview } from '@/modules/kabina-files/utils/xlsxPreview';
 import { filesErrorSentence } from '@/modules/kabina-files/utils/filesErrors';
+import { expectedSize, isAbort, readWithProgress } from '@/modules/kabina-files/utils/downloads';
+import type { DownloadProgress } from '@/modules/kabina-files/utils/downloads';
 import { api, readApiJson } from '@/shared/api';
 import type { KabinaFileEntry } from '@/shared/types';
 import { pluralRu } from '@/shared/utils';
@@ -109,6 +111,8 @@ type FilePreviewProps = {
   /** «Скачать zip» of a folder, and whether one is being built. */
   onZip?: () => void;
   isZipping?: boolean;
+  /** «Скачать»: progress for the screen's download plate (null when it ends). */
+  onDownloadProgress?: (progress: DownloadProgress | null) => void;
 };
 
 function useFileContent(entry: KabinaFileEntry | null, kind: PreviewKind, projectId: string | null): LoadedContent {
@@ -266,16 +270,28 @@ export default function FilePreview(props: FilePreviewProps) {
       if (content.state === 'blob') {
         blob = content.blob;
       } else {
-        const response = await api.readFileBlob(props.readProjectId, entry.path);
-        // An error answer must not be saved under the file's name.
-        if (!response.ok) {
-          setDownloadError(response.status === 404 ? 'Файла больше нет на сервере.' : `Сервер не отдал файл (${response.status}).`);
-          return;
+        // The screen's plate shows the progress; «Отмена» there aborts this request.
+        const controller = new AbortController();
+        const cancel = () => controller.abort();
+        const report = props.onDownloadProgress;
+        report?.({ name: entry.name, phase: 'loading', loaded: 0, total: entry.size || null, cancel });
+        try {
+          const response = await api.readFileBlob(props.readProjectId, entry.path, { signal: controller.signal });
+          // An error answer must not be saved under the file's name.
+          if (!response.ok) {
+            setDownloadError(response.status === 404 ? 'Файла больше нет на сервере.' : `Сервер не отдал файл (${response.status}).`);
+            return;
+          }
+          // The server streams without a length: the tree's size of the file stands in for it.
+          blob = await readWithProgress(response, expectedSize(response, entry.size), (loaded, total) => {
+            report?.({ name: entry.name, phase: 'loading', loaded, total, cancel });
+          });
+        } finally {
+          report?.(null);
         }
-        blob = await response.blob();
       }
-    } catch {
-      setDownloadError('Не скачалось: сервер не ответил.');
+    } catch (error) {
+      setDownloadError(isAbort(error) ? 'Скачивание отменено.' : 'Не скачалось: сервер не ответил.');
       return;
     }
     const url = URL.createObjectURL(blob);

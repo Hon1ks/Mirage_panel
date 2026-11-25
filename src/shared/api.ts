@@ -478,8 +478,8 @@ export const api = {
     transfer: (projectId: string, body: { paths: string[]; toProjectId: string; toFolder: string; mode: 'copy' | 'move' }) =>
       post(`/api/kabina-files/projects/${encodeURIComponent(projectId)}/transfer`, body),
     // «Скачать zip»: the answer is the archive itself (or a JSON error).
-    zip: (projectId: string, paths: string[]) =>
-      post(`/api/kabina-files/projects/${encodeURIComponent(projectId)}/zip`, { paths }),
+    zip: (projectId: string, paths: string[], options: ApiRequestOptions = {}) =>
+      post(`/api/kabina-files/projects/${encodeURIComponent(projectId)}/zip`, { paths }, options),
     // Same endpoint as the authors' tree; FormData keeps the multipart content type.
     upload: (projectId: string, formData: FormData) =>
       authenticatedFetch(`/api/file-tree/projects/${encodeURIComponent(projectId)}/files/upload`, { method: 'POST', body: formData }),
