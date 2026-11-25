@@ -1742,3 +1742,53 @@
     bottom: calc(92px + env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* «Скачать» — сама кнопка как полоса прогресса: заливка слева, «45 %», второе нажатие отменяет */
+
+.kf-dlbtn {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.kf-dlbtn[data-active] {
+  border-color: rgba(255, 106, 43, 0.6);
+  color: var(--kb-text);
+}
+
+.kf-dlbtn-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: -1;
+  width: var(--kf-dl-p, 0%);
+  background: rgba(255, 106, 43, 0.32);
+  transition: width 0.15s linear;
+}
+
+.kf-dlbtn[data-indeterminate] .kf-dlbtn-fill {
+  width: 35%;
+  animation: kf-dl-run 1.2s ease-in-out infinite;
+}
+
+.kf-dlbtn-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.kf-dlbtn-cancel {
+  font-size: 11px;
+  color: var(--kb-soft);
+}
+
+.kf-dlbtn[data-active]:hover .kf-dlbtn-cancel {
+  color: var(--kb-signal-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kf-dlbtn[data-indeterminate] .kf-dlbtn-fill {
+    animation: none;
+    width: 100%;
+    opacity: 0.4;
+  }
+}

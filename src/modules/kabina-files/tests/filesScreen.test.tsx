@@ -324,12 +324,12 @@ test('Ctrl-click ticks rows; «Переместить в…» sends them to the 
 
 test('a download shows its progress at the bottom; «Отмена» stops it', async () => {
   await renderFiles();
-  let pushRest: (() => void) | null = null;
+  const stream: { pushRest: (() => void) | null } = { pushRest: null };
   apiMock.readFileBlob.mockImplementation(async (_projectId: string, _path: string, options: { signal?: AbortSignal } = {}) => {
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(new Uint8Array(600));
-        pushRest = () => controller.enqueue(new Uint8Array(600));
+        stream.pushRest = () => controller.enqueue(new Uint8Array(600));
         options.signal?.addEventListener('abort', () => controller.error(new DOMException('cancelled', 'AbortError')));
       },
     });
@@ -345,7 +345,7 @@ test('a download shows its progress at the bottom; «Отмена» stops it', a
     const bar = screen.getByRole('progressbar', { name: 'Скачивание deploy.sh' });
     assert.equal(bar.getAttribute('aria-valuenow'), '50', 'half of the 1200 bytes the tree knows about');
     assert.ok(screen.getByText(/50 % · 600 Б из 1,2 КБ/));
-    pushRest?.();
+    stream.pushRest?.();
     fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
     await flush();
     assert.equal(screen.queryByRole('progressbar'), null, 'the plate goes away');
@@ -354,4 +354,27 @@ test('a download shows its progress at the bottom; «Отмена» stops it', a
   } finally {
     URL.createObjectURL = originalCreate;
   }
+});
+
+test('the preview\'s «Скачать» fills with the progress itself; a second tap cancels', async () => {
+  await renderFiles();
+  apiMock.readFileBlob.mockImplementation(async (_projectId: string, _path: string, options: { signal?: AbortSignal } = {}) => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(300));
+        options.signal?.addEventListener('abort', () => controller.error(new DOMException('cancelled', 'AbortError')));
+      },
+    });
+    return new Response(body, { status: 200 });
+  });
+  fireEvent.click(screen.getByRole('treeitem', { name: /deploy\.sh/ }));
+  await flush();
+  fireEvent.click(screen.getByRole('button', { name: /^Скачать$/ }));
+  await flush(200);
+  const button = screen.getByRole('button', { name: /Скачивается deploy\.sh: 25 %/ });
+  assert.equal(screen.queryByRole('progressbar'), null, 'no plate at the bottom: the button shows it');
+  fireEvent.click(button);
+  await flush();
+  assert.ok(screen.getByRole('button', { name: /^Скачать$/ }), 'back to «Скачать»');
+  assert.equal(screen.getByRole('alert').textContent, 'Скачивание отменено.');
 });

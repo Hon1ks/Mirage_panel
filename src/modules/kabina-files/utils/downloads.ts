@@ -12,6 +12,8 @@ export type DownloadProgress = {
   loaded: number;
   total: number | null;
   cancel: () => void;
+  /** The entry whose own «Скачать» button shows this download (then the bottom plate stays hidden). */
+  forPath?: string;
 };
 
 /** How often the plate is redrawn while bytes arrive (ms). */

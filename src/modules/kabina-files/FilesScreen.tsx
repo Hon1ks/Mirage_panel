@@ -535,7 +535,8 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
     if (done === 1 && lastTo && rootPath && isWithin(rootPath, lastTo) && folders[target.folder]) setPendingSelect(lastTo);
   };
 
-  const downloadZip = async (entries: KabinaFileEntry[]) => {
+  /** `forPath` — the folder whose «Скачать zip» in the preview shows the progress instead of the plate. */
+  const downloadZip = async (entries: KabinaFileEntry[], forPath?: string) => {
     const groups = groupByOwner(entries);
     if (groups.size === 0) {
       setNote({ kind: 'error', text: 'Архивом можно скачать только то, что лежит в проектах.' });
@@ -547,14 +548,14 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
       for (const [projectId, group] of groups) {
         const fallbackName = group.length === 1 ? `${group[0].name}.zip` : 'файлы.zip';
         // The server packs the whole archive before the first byte: «Собираю архив…» until then.
-        setDownload({ name: fallbackName, phase: 'preparing', loaded: 0, total: null, cancel: () => controller.abort() });
+        setDownload({ name: fallbackName, phase: 'preparing', loaded: 0, total: null, cancel: () => controller.abort(), forPath });
         const response = await api.kabinaFiles.zip(projectId, group.map((entry) => entry.path), { signal: controller.signal });
         // An error answer is JSON: readApiJson turns it into the server's reason.
         if (!response.ok) await readApiJson(response);
         const skipped = Number(response.headers.get('X-Kabina-Skipped') ?? 0);
         const name = readDownloadName(response, fallbackName);
         const blob = await readWithProgress(response, expectedSize(response, null), (loaded, total) => {
-          setDownload({ name, phase: 'loading', loaded, total, cancel: () => controller.abort() });
+          setDownload({ name, phase: 'loading', loaded, total, cancel: () => controller.abort(), forPath });
         });
         saveBlob(blob, name);
         if (skipped > 0) {
@@ -862,9 +863,9 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
       onRenameStarted={() => setRenameFor(null)}
       canTransfer={Boolean(selected && canEditPath(selected.path))}
       onTransfer={(mode) => selected && setPendingTransfer({ mode, entries: [selected] })}
-      onZip={() => selected && void downloadZip([selected])}
+      onZip={() => selected && void downloadZip([selected], selected.path)}
       isZipping={isZipping}
-      onDownloadProgress={setDownload}
+      zipProgress={download && selected && download.forPath === selected.path ? download : null}
       focusLine={selected && selected.path === revealTarget ? focusLine : null}
     />
   );
@@ -1229,7 +1230,8 @@ export function FilesScreen({ projects, routeProjectId, isLoadingProjects = fals
         />
       )}
 
-      {download && <DownloadPlate download={download} />}
+      {/* The preview's own button shows its download while that preview is on screen. */}
+      {download && !(download.forPath && download.forPath === selected?.path && (!isPhone || isSheetOpen)) && <DownloadPlate download={download} />}
 
       {rowMenu && (
         <FilesContextMenu

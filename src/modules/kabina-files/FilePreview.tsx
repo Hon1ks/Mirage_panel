@@ -35,6 +35,7 @@ import type { SheetPreview } from '@/modules/kabina-files/utils/xlsxPreview';
 import { filesErrorSentence } from '@/modules/kabina-files/utils/filesErrors';
 import { expectedSize, isAbort, readWithProgress } from '@/modules/kabina-files/utils/downloads';
 import type { DownloadProgress } from '@/modules/kabina-files/utils/downloads';
+import { DownloadButton } from '@/modules/kabina-files/DownloadPlate';
 import { api, readApiJson } from '@/shared/api';
 import type { KabinaFileEntry } from '@/shared/types';
 import { pluralRu } from '@/shared/utils';
@@ -111,8 +112,8 @@ type FilePreviewProps = {
   /** «Скачать zip» of a folder, and whether one is being built. */
   onZip?: () => void;
   isZipping?: boolean;
-  /** «Скачать»: progress for the screen's download plate (null when it ends). */
-  onDownloadProgress?: (progress: DownloadProgress | null) => void;
+  /** The screen's zip of this folder in flight: «Скачать zip» shows its progress. */
+  zipProgress?: DownloadProgress | null;
 };
 
 function useFileContent(entry: KabinaFileEntry | null, kind: PreviewKind, projectId: string | null): LoadedContent {
@@ -221,6 +222,8 @@ export default function FilePreview(props: FilePreviewProps) {
   // Why «Скачать» failed (file gone, no access, no network); resets when another entry is picked.
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const renameRef = useRef<HTMLInputElement>(null);
+  // «Скачать» in flight: the button itself shows the progress and cancels on a second tap.
+  const [fileDownload, setFileDownload] = useState<DownloadProgress | null>(null);
 
   useEffect(() => {
     setImageSize(null);
@@ -270,11 +273,11 @@ export default function FilePreview(props: FilePreviewProps) {
       if (content.state === 'blob') {
         blob = content.blob;
       } else {
-        // The screen's plate shows the progress; «Отмена» there aborts this request.
+        // The button shows the progress; a second tap aborts this request.
         const controller = new AbortController();
         const cancel = () => controller.abort();
-        const report = props.onDownloadProgress;
-        report?.({ name: entry.name, phase: 'loading', loaded: 0, total: entry.size || null, cancel });
+        const report = setFileDownload;
+        report({ name: entry.name, phase: 'loading', loaded: 0, total: entry.size || null, cancel });
         try {
           const response = await api.readFileBlob(props.readProjectId, entry.path, { signal: controller.signal });
           // An error answer must not be saved under the file's name.
@@ -284,10 +287,10 @@ export default function FilePreview(props: FilePreviewProps) {
           }
           // The server streams without a length: the tree's size of the file stands in for it.
           blob = await readWithProgress(response, expectedSize(response, entry.size), (loaded, total) => {
-            report?.({ name: entry.name, phase: 'loading', loaded, total, cancel });
+            report({ name: entry.name, phase: 'loading', loaded, total, cancel });
           });
         } finally {
-          report?.(null);
+          report(null);
         }
       }
     } catch (error) {
@@ -535,13 +538,20 @@ export default function FilePreview(props: FilePreviewProps) {
           <ChatGlyph />Открыть в чате
         </Button>
         {isDirectory ? (
-          <Button variant="ghost" disabled={!entry || !props.canTransfer || !props.onZip || props.isZipping} title={props.canTransfer ? undefined : 'Архивом можно скачать только папку внутри проекта'} onClick={() => props.onZip?.()}>
-            <ZipGlyph />{props.isZipping ? 'Собираю…' : 'Скачать zip'}
-          </Button>
+          <DownloadButton
+            download={props.zipProgress ?? null}
+            idle={<><ZipGlyph />Скачать zip</>}
+            disabled={!entry || !props.canTransfer || !props.onZip || props.isZipping}
+            title={props.canTransfer ? undefined : 'Архивом можно скачать только папку внутри проекта'}
+            onStart={() => props.onZip?.()}
+          />
         ) : (
-          <Button variant="ghost" disabled={!entry || !props.readProjectId} onClick={() => void download()}>
-            <DownloadGlyph />Скачать
-          </Button>
+          <DownloadButton
+            download={fileDownload}
+            idle={<><DownloadGlyph />Скачать</>}
+            disabled={!entry || !props.readProjectId}
+            onStart={() => void download()}
+          />
         )}
         {downloadError && (
           <span className="kf-ask-note" role="alert" style={{ flexBasis: '100%', color: 'var(--kb-signal-text)' }}>{downloadError}</span>
