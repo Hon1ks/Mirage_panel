@@ -1,6 +1,7 @@
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { primeMicrophone, usePressOrHold } from '@/modules/kabina';
+import { NO_AUTOFILL, primeMicrophone, usePressOrHold } from '@/modules/kabina';
 
 import { VoiceAlert } from '@/modules/kabina-voice/VoiceAlert';
 import { VoiceCards } from '@/modules/kabina-voice/VoiceCards';
@@ -61,6 +62,29 @@ export function VoicePhone({ flow, context, projects, onClose }: VoicePhoneProps
   const executing = flow.phase === 'executing';
   const timerMs = listening || flow.phase === 'starting' ? flow.elapsedMs : flow.spokenMs;
   const words = flow.transcript ? flow.transcript.split(/\s+/) : [];
+  // «Исправить текст»: the transcript in a field; «Разобрать заново» parses the edited text.
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const editRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (!editing) return;
+    const field = editRef.current;
+    field?.focus();
+    field?.setSelectionRange(field.value.length, field.value.length);
+  }, [editing]);
+  // A new recording or a closed step ends the editing.
+  useEffect(() => {
+    if (step !== 'got') setEditing(false);
+  }, [step]);
+  const startEdit = () => {
+    setDraft(flow.transcript);
+    setEditing(true);
+  };
+  const applyEdit = () => {
+    setEditing(false);
+    const text = draft.trim();
+    if (text && text !== flow.transcript.trim()) flow.reparse(text);
+  };
   const failure = flow.phase === 'error' ? flow.failure : null;
   const micBusy = flow.phase === 'starting' || flow.phase === 'transcribing' || flow.phase === 'parsing';
   // The big mic: a tap toggles listening; held, it listens until the finger is lifted.
@@ -182,15 +206,48 @@ export function VoicePhone({ flow, context, projects, onClose }: VoicePhoneProps
           <div className="kb-vo-ph-scroll">
             <figure className="kb-vo-ph-quote kb-bz kb-rise">
               <figcaption className="kb-m"><span style={{ color: 'var(--kb-head)' }}>ТЫ СКАЗАЛ</span><span>{formatTimer(flow.spokenMs)}</span></figcaption>
-              <blockquote>
-                {words.map((word, index) => (
-                  <span key={index} data-mark={marked.has(index) ? '' : undefined}>{word}{' '}</span>
-                ))}
-              </blockquote>
-              <button className="kb-btn kb-ghost" type="button" style={{ alignSelf: 'flex-end', minHeight: 44, fontSize: 14, borderColor: 'transparent', color: 'var(--kb-soft)' }} onClick={() => void flow.listen({ confirmable: true })}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4" /></svg>
-                Сказать заново
-              </button>
+              {editing ? (
+                <>
+                  <label htmlFor="kb-voice-ph-edit" className="kb-sr">Текст расшифровки</label>
+                  <textarea
+                    {...NO_AUTOFILL}
+                    autoCapitalize="sentences"
+                    id="kb-voice-ph-edit"
+                    ref={editRef}
+                    className="kb-vo-edit"
+                    rows={4}
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                  />
+                  <div className="kb-vo-ph-quote-acts">
+                    <button className="kb-btn kb-ghost" type="button" style={{ minHeight: 44, fontSize: 14, color: 'var(--kb-soft)' }} onClick={() => setEditing(false)}>
+                      Отмена
+                    </button>
+                    <button className="kb-btn kb-pri" type="button" style={{ minHeight: 44, fontSize: 14 }} disabled={!draft.trim()} onClick={applyEdit}>
+                      Разобрать заново
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* A tap on the text opens it for editing, like «Исправить текст». */}
+                  <blockquote onClick={executing ? undefined : startEdit} style={executing ? undefined : { cursor: 'text' }}>
+                    {words.map((word, index) => (
+                      <span key={index} data-mark={marked.has(index) ? '' : undefined}>{word}{' '}</span>
+                    ))}
+                  </blockquote>
+                  <div className="kb-vo-ph-quote-acts">
+                    <button className="kb-btn kb-ghost" type="button" style={{ minHeight: 44, fontSize: 14, borderColor: 'transparent', color: 'var(--kb-soft)' }} disabled={executing} onClick={startEdit}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="M13.5 6.5l4 4" /></svg>
+                      Исправить текст
+                    </button>
+                    <button className="kb-btn kb-ghost" type="button" style={{ minHeight: 44, fontSize: 14, borderColor: 'transparent', color: 'var(--kb-soft)' }} onClick={() => void flow.listen({ confirmable: true })}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4" /></svg>
+                      Сказать заново
+                    </button>
+                  </div>
+                </>
+              )}
             </figure>
 
             <section aria-labelledby="kb-vo-ph-acts" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

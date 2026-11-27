@@ -316,3 +316,25 @@ test('with a chat open the phrase goes into that chat by default (steer)', async
   await openOverlay({ activeSessionId: 's-1', activeProjectId: 'p-mir' });
   assert.ok(screen.getByRole('button', { name: /Кому: Текущий диалог · Панель Мираж/ }));
 });
+
+test('phone: «Исправить текст» opens the transcript in a field; «Разобрать заново» parses the edited text', async () => {
+  const { KabinaVoiceOverlay } = await import('@/modules/kabina-voice');
+  const view = render(
+    <MemoryRouter>
+      <KabinaVoiceOverlay onClose={() => undefined} holding={false} buttonPresses={0} isPhone activeSessionId={null} activeProjectId={null} projects={PROJECTS} />
+    </MemoryRouter>,
+  );
+  await waitFor(() => assert.ok(screen.getByRole('button', { name: /^Готово/ })));
+  fireEvent.click(screen.getByRole('button', { name: /^Готово/ }));
+  await waitFor(() => assert.ok(screen.getByRole('button', { name: /Исправить текст/ })), { timeout: 3_000 });
+
+  fireEvent.click(screen.getByRole('button', { name: /Исправить текст/ }));
+  const field = screen.getByLabelText('Текст расшифровки') as HTMLTextAreaElement;
+  assert.equal(field.value, 'Напомни завтра в 11 позвонить Андрею');
+  fireEvent.change(field, { target: { value: 'Напомни завтра в 12 позвонить Андрею' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Разобрать заново' }));
+
+  await waitFor(() => assert.equal(apiMock.voice.intent.mock.calls.at(-1)?.[0], 'Напомни завтра в 12 позвонить Андрею'));
+  assert.equal(screen.queryByLabelText('Текст расшифровки'), null, 'the field closes');
+  view.unmount();
+});

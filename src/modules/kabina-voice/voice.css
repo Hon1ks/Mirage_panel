@@ -1795,3 +1795,11 @@
     transition: none !important;
   }
 }
+
+/* Телефон: «Исправить текст» и «Сказать заново» под расшифровкой; правка — в поле */
+.kb-vo-ph-quote-acts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
