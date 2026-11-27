@@ -15,6 +15,7 @@ import { useCalendarEvents } from '@/modules/kabina-calendar/hooks/useCalendarEv
 import { useCalendarSync } from '@/modules/kabina-calendar/hooks/useCalendarSync';
 import {
   TYPE_ORDER,
+  collapseFrequentTimers,
   findNextItem,
   formatClock,
   isPersonType,
@@ -95,7 +96,8 @@ export default function KabinaCalendarScreen({ isPhone, projects }: KabinaCalend
   const telegramStatus = useTelegramLink().status;
   const telegramLinked = Boolean(telegramStatus?.configured && telegramStatus.linked);
 
-  const allItems = useMemo(() => items ?? [], [items]);
+  // Timers firing more often than hourly come as one line per day, not 144 strikes through the grid.
+  const allItems = useMemo(() => collapseFrequentTimers(items ?? []), [items]);
 
   // Keep the selected copy fresh when the listing changes; select `?event=` / the nearest one once.
   useEffect(() => {

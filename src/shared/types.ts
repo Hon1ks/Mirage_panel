@@ -2898,6 +2898,11 @@ export type CalendarItem = {
     /** UTC offset of that zone at this firing and now, minutes; they differ across a summer-time switch. */
     utcOffsetMin: number | null;
     currentUtcOffsetMin: number | null;
+    /**
+     * Client-side only: a timer firing more often than hourly is folded into one line per day
+     * (collapseFrequentTimers) — how many firings it stands for and the usual gap between them.
+     */
+    folded?: { count: number; everyMin: number; firstAt: string; lastAt: string };
   } | null;
 };
 

@@ -482,3 +482,73 @@ export function describeTimerZone(server: NonNullable<CalendarItem['server']>, p
     note: `в этот день на сервере ${formatOffset(at)} (сезонный перевод часов) — по ${panelLabel} запуск на ${shift} ${direction}, чем сейчас`,
   };
 }
+
+/** A server timer firing at least this often (minutes) is folded into one line per day. */
+const FOLD_EVERY_MIN = 60;
+/** …and only when it fires at least this many times that day. */
+const FOLD_MIN_FIRINGS = 4;
+
+/** «каждые 10 мин», «каждую минуту», «каждые 30 мин». */
+export function formatEvery(minutes: number): string {
+  if (minutes <= 1) return 'каждую минуту';
+  return `каждые ${minutes} мин`;
+}
+
+/**
+ * Used by the calendar screen: a server timer that fires more often than hourly
+ * (an RSS poller every 10 minutes is 144 lines a day) becomes one all-day line per
+ * day — «RSS digest · каждые 10 мин» — standing for all of that day's firings.
+ * Rare timers and everything else pass through unchanged.
+ */
+export function collapseFrequentTimers(items: CalendarItem[]): CalendarItem[] {
+  const groups = new Map<string, CalendarItem[]>();
+  const order: Array<CalendarItem | string> = [];
+  for (const item of items) {
+    if (item.source !== 'systemd' || !item.server) {
+      order.push(item);
+      continue;
+    }
+    const wall = toWall(item.startsAt);
+    const key = `${item.server.unit}|${wall.getFullYear()}-${pad2(wall.getMonth() + 1)}-${pad2(wall.getDate())}`;
+    const group = groups.get(key);
+    if (group) group.push(item);
+    else {
+      groups.set(key, [item]);
+      order.push(key);
+    }
+  }
+
+  const result: CalendarItem[] = [];
+  for (const entry of order) {
+    if (typeof entry !== 'string') {
+      result.push(entry);
+      continue;
+    }
+    const firings = (groups.get(entry) ?? []).slice().sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+    const gaps = firings.slice(1).map((item, index) => (Date.parse(item.startsAt) - Date.parse(firings[index].startsAt)) / 60_000);
+    const sortedGaps = gaps.slice().sort((a, b) => a - b);
+    const typicalGap = sortedGaps.length ? sortedGaps[Math.floor(sortedGaps.length / 2)] : Infinity;
+    if (firings.length < FOLD_MIN_FIRINGS || typicalGap >= FOLD_EVERY_MIN) {
+      result.push(...firings);
+      continue;
+    }
+    const first = firings[0];
+    const last = firings[firings.length - 1];
+    const everyMin = Math.max(1, Math.round(typicalGap));
+    const day = entry.slice(entry.lastIndexOf('|') + 1);
+    result.push({
+      ...first,
+      id: `systemd:${first.server!.unit}@day:${day}`,
+      title: `${first.title} · ${formatEvery(everyMin)}`,
+      endsAt: last.endsAt,
+      allDay: true,
+      // Done once the day's last firing has passed.
+      status: last.status,
+      server: {
+        ...first.server!,
+        folded: { count: firings.length, everyMin, firstAt: first.startsAt, lastAt: last.startsAt },
+      },
+    });
+  }
+  return result;
+}

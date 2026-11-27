@@ -5,6 +5,7 @@ import { afterAll, beforeAll, test } from 'vitest';
 import { browserTimeZone, setPanelTimeZone } from '@/modules/kabina';
 import {
   bandOf,
+  collapseFrequentTimers,
   dayPieces,
   describeTimerZone,
   formatCountdown,
@@ -121,3 +122,30 @@ test('server timers: the zone row explains a firing moved by the server summer t
   assert.equal(describeTimerZone({ ...base, timeZone: 'Europe/Helsinki', utcOffsetMin: 180, currentUtcOffsetMin: 120 }, 'ЕКБ') !== null, true);
   assert.equal(describeTimerZone({ ...base, timeZone: null, utcOffsetMin: null, currentUtcOffsetMin: null }, 'ЕКБ'), null);
 });
+
+test('a server timer firing every 10 minutes folds into one all-day line per day; rare timers stay', () => {
+  const firing = (unit: string, iso: string, title = unit): CalendarItem => ({
+    id: `systemd:${unit}@${iso}`, source: 'systemd', type: 'server_schedule', title, startsAt: iso,
+    endsAt: new Date(Date.parse(iso) + 5 * 60_000).toISOString(), projectId: null, projectName: null, contact: null,
+    location: null, note: null, remindBeforeMin: null, status: 'done', sessionId: null, recurrence: null, occurrenceOf: null,
+    readOnly: true, preparedAt: null, allDay: false, google: null, agent: null,
+    server: { unit, activates: null, description: title, calendarSpec: '*:0/10', lastTriggerAt: null, lastResult: null, timeZone: null, utcOffsetMin: null, currentUtcOffsetMin: null },
+  } as unknown as CalendarItem);
+  const base = toWallNoon();
+  const rss = Array.from({ length: 6 }, (_, index) => firing('rss.timer', new Date(base + index * 10 * 60_000).toISOString(), 'RSS digest'));
+  const backup = [firing('backup.timer', new Date(base).toISOString(), 'Backup'), firing('backup.timer', new Date(base + 3 * 3600_000).toISOString(), 'Backup')];
+  const result = collapseFrequentTimers([...rss, ...backup]);
+  const folded = result.filter((item) => item.server?.unit === 'rss.timer');
+  assert.equal(folded.length, 1);
+  assert.equal(folded[0].allDay, true);
+  assert.equal(folded[0].title, 'RSS digest · каждые 10 мин');
+  assert.deepEqual(folded[0].server?.folded && { count: folded[0].server.folded.count, everyMin: folded[0].server.folded.everyMin }, { count: 6, everyMin: 10 });
+  assert.equal(result.filter((item) => item.server?.unit === 'backup.timer').length, 2, 'every 3 hours stays as it is');
+});
+
+/** Noon of today in the panel zone, as an instant (so the firings stay inside one panel day). */
+function toWallNoon(): number {
+  const wall = new Date();
+  wall.setHours(12, 0, 0, 0);
+  return fromWall(wall).getTime();
+}

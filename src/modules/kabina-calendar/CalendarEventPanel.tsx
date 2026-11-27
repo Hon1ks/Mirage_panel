@@ -12,10 +12,12 @@ import {
   formatClock,
   formatCountdown,
   formatDayFull,
+  formatEvery,
   formatRemind,
   isPersonType,
   isSameDay,
   phoneUrl,
+  plural,
   startOfDay,
   telegramUrl,
   toWall,
@@ -104,6 +106,12 @@ function rowsFor(item: CalendarItem, projects: KabinaProjectRef[], googleEnabled
     const zone = describeTimerZone(item.server, panelZoneLabel());
     return [
       { key: 'РАСПИСАНИЕ', value: item.server.calendarSpec ?? 'по таймеру', sub: item.server.unit },
+      // A frequent timer folded into one line a day: how many firings it stands for.
+      ...(item.server.folded ? [{
+        key: 'ЗА ДЕНЬ',
+        value: `${item.server.folded.count} ${plural(item.server.folded.count, 'запуск', 'запуска', 'запусков')} · ${formatEvery(item.server.folded.everyMin)}`,
+        sub: `с ${formatClock(toWall(item.server.folded.firstAt))} до ${formatClock(toWall(item.server.folded.lastAt))}`,
+      }] : []),
       ...(zone ? [{ key: 'ПОЯС', value: zone.value, sub: zone.note ?? 'время в спецификации — по поясу сервера' }] : []),
       { key: 'СЕРВЕР', value: window.location.hostname || 'сервер', sub: item.server.activates ?? item.server.unit },
       {
@@ -226,7 +234,9 @@ export default function CalendarEventPanel({
   const countdown = isNext && !done ? formatCountdown(Date.parse(item.startsAt), nowMs) : '';
   // An all-day event ends at the next midnight; its last day is the one before.
   const lastAllDay = addDays(end, -1);
-  const when = isServer
+  const when = isServer && item.server?.folded
+    ? `${formatDayFull(start)} · ${formatEvery(item.server.folded.everyMin)}`
+    : isServer
     ? `${formatDayFull(start)} · ${formatClock(start)}${item.server?.calendarSpec ? ` · ${item.server.calendarSpec}` : ''}`
     : item.allDay
       ? isSameDay(lastAllDay, start) || lastAllDay < start
